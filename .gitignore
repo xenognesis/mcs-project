@@ -1,0 +1,11 @@
+# Dependencias y caché de PNPM
+node_modules/
+.pnpm-store/
+
+# Carpetas de compilación y empaquetado
+dist/
+dist-electron/
+release/
+
+# Logs de errores
+*.log

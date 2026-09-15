@@ -1,0 +1,44 @@
+{
+  "name": "lantern-minecraft-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Coordinador local para un servidor Minecraft compartido",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on tcp:5173 dist-electron/main.js && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && vite build",
+    "test": "vitest run",
+    "package": "pnpm build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest",
+    "wait-on": "latest"
+  },
+  "build": {
+    "appId": "com.lantern.minecraft-host",
+    "productName": "Lantern Host",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ]
+  },
+  "packageManager": "pnpm@12.4.1+sha512.2e81e399d73fe8390dab25e06aa788ab7a5908248d2f5a370f82b481147a6a7a367bf8048f9a6fdb6460f21a66f0542dedb8b94ca2c8723596741920b1656d4c"
+}
