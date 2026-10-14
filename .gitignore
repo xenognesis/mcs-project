@@ -9,3 +9,5 @@ release/
 
 # Logs de errores
 *.log
+
+token*

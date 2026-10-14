@@ -21,8 +21,22 @@ export async function fetchManifest(config: AppConfig) {
 export async function syncPack(config: AppConfig, log: (message: string) => void) {
   const manifest = await fetchManifest(config);
   for (const file of manifest.files) {
-    // MultiMC almacena los archivos de juego de una instancia dentro de .minecraft.
-    const clientRoot = path.join(path.dirname(config.multiMcPath), 'instances', config.multiMcInstance, '.minecraft');
+    let clientRoot = '';
+    if (config.manualLauncher) {
+      if (config.clientInstancePath) {
+        clientRoot = config.clientInstancePath;
+      } else {
+        if (file.scope === 'client') {
+          log(`Omitiendo ${file.path} (launcher manual sin ruta de instancia especificada)`);
+          continue;
+        }
+      }
+    } else if (config.multiMcPath) {
+      // MultiMC almacena los archivos de juego de una instancia dentro de .minecraft.
+      clientRoot = path.join(path.dirname(config.multiMcPath), 'instances', config.multiMcInstance, '.minecraft');
+    } else if (file.scope === 'client') {
+      continue;
+    }
     const target = safeTarget(file.scope === 'client' ? clientRoot : config.driveRoot, file.path);
     try { if (digest(await readFile(target)) === file.sha256) continue; } catch { /* download below */ }
     log(`Actualizando ${file.path}`);

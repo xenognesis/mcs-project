@@ -6,6 +6,7 @@ export type AppConfig = {
   playerName: string;
   isAdmin: boolean;
   discordBotToken?: string;
+  discordChannelId?: string;
   githubToken?: string;
   packRepo: RepoRef;
   coordinationRepo: RepoRef;
@@ -19,6 +20,10 @@ export type AppConfig = {
   players: Player[];
   backupIntervalMinutes: number;
   backupRetention: number;
+  adminPassword?: string;
+  adminDiscordId?: string;
+  manualLauncher?: boolean;
+  clientInstancePath?: string;
   timeZone: string;
 };
 
@@ -50,4 +55,6 @@ export type AppStatus = {
   radminIp: string | null;
   server: 'stopped' | 'starting' | 'running' | 'stopping';
   logs: string[];
+  consoleUnlocked: boolean;
+  hasAdminSecret: boolean;
 };
