@@ -26,7 +26,11 @@ let updater: Updater | null = null;
 const logs: string[] = [];
 // Durante el cierre por actualización o al salir, la ventana ya puede estar destruida: enviar a una
 // instancia destruida lanza "Object has been destroyed" y Electron muestra un diálogo de error.
-const send = (channel: string, payload: unknown) => { if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, payload); };
+const send = (channel: string, payload: unknown) => {
+  try {
+    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, payload);
+  } catch { /* ventana cerrándose: se descarta el aviso */ }
+};
 const appendLog = (line: string) => { logs.push(`${new Date().toLocaleTimeString()}  ${line}`); if (logs.length > 300) logs.shift(); send('log', logs.at(-1)); };
 const server = new MinecraftServer(appendLog, (state) => send('server-state', state));
 // Electron muestra un diálogo ante excepciones no atrapadas del proceso principal (por ejemplo al
@@ -79,6 +83,12 @@ async function publishWorldIfChanged(reason: string) {
 }
 function launchMultiMc(address: string) {
   const child = require('node:child_process').spawn(config.multiMcPath, ['--launch', config.multiMcInstance, '--server', address], { detached: true, stdio: 'ignore', windowsHide: true }); child.unref();
+}
+// Antes de jugar se exige estar actualizado: si hay una versión nueva, se descarga e instala en vez
+// de dejar iniciar/unirse desactualizado. Si la verificación falla (sin conexión), no bloquea.
+async function requireLatestVersion() {
+  const gate = await updater?.ensureLatest();
+  if (gate && !gate.proceed) throw new Error(gate.message);
 }
 async function beginServer() {
   const preflight = await status();
@@ -147,9 +157,10 @@ app.whenReady().then(async () => {
     appendLog(`[Mundo] Estado actual publicado manualmente (hash ${hash.slice(0, 12)}).`);
     return status();
   });
-  ipcMain.handle('server:start', async () => { await beginServer(); return status(); });
+  ipcMain.handle('server:start', async () => { await requireLatestVersion(); await beginServer(); return status(); });
   ipcMain.handle('server:stop', async () => { await endServer(); return status(); });
   ipcMain.handle('server:join', async () => {
+    await requireLatestVersion();
     const lease = (await currentLease())?.value;
     if (!lease || isStale(lease)) throw new Error('No hay un servidor activo para unirse.');
     if (config.manualLauncher) clipboard.writeText(`${lease.ip}:${lease.port}`); else launchMultiMc(`${lease.ip}:${lease.port}`);

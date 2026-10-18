@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater';
 import type { ProgressInfo, UpdateInfo } from 'electron-updater';
-import { formatBytes, progressPercent, shouldInstallNow } from './update-policy';
+import { formatBytes, progressPercent, shouldInstallNow, updateGateFor } from './update-policy';
+import type { UpdateGate } from './update-policy';
 import type { UpdateState } from './types';
 
 // Auto-actualización vía GitHub Releases del propio repositorio de la aplicación.
@@ -27,6 +28,11 @@ export type UpdaterOptions = {
 export type Updater = {
   check: (manual: boolean) => Promise<UpdateState>;
   install: () => void;
+  /**
+   * Comprobación previa a jugar (iniciar/unirse): si hay una versión nueva, la descarga/instala y
+   * avisa para no continuar. Sin novedades ni conexión, devuelve `proceed`.
+   */
+  ensureLatest: () => Promise<UpdateGate>;
   state: () => UpdateState;
 };
 
@@ -40,6 +46,7 @@ export function createUpdater(options: UpdaterOptions): Updater {
     return {
       check: async () => { setState({ phase: 'error', message: 'Las actualizaciones automáticas sólo funcionan en la aplicación instalada.' }); return state; },
       install: () => undefined,
+      ensureLatest: async () => ({ proceed: true }),
       state: () => state
     };
   }
@@ -105,5 +112,15 @@ export function createUpdater(options: UpdaterOptions): Updater {
     return state;
   }
 
-  return { check, install, state: () => state };
+  // Antes de iniciar o unirse: si hay una versión más nueva, se descarga (autoDownload) y, cuando
+  // está lista, se instala en vez de dejar jugar con la versión vieja. Si no hay conexión o no hay
+  // novedades, la partida sigue normalmente.
+  async function ensureLatest(): Promise<UpdateGate> {
+    if (state.phase !== 'downloaded' && state.phase !== 'available' && state.phase !== 'downloading') await check(false);
+    const gate = updateGateFor(state.phase, state.version);
+    if (state.phase === 'downloaded') install();
+    return gate;
+  }
+
+  return { check, install, ensureLatest, state: () => state };
 }

@@ -30,3 +30,21 @@ export function progressPercent(info: { percent?: number; transferred?: number; 
 export function shouldInstallNow(phase: UpdatePhase, serverRunning: boolean): boolean {
   return phase === 'downloaded' && !serverRunning;
 }
+
+/** Resultado de la comprobación previa a jugar: `proceed` es true sólo si se puede iniciar/unir. */
+export type UpdateGate = { proceed: true } | { proceed: false; message: string };
+
+/**
+ * Decisión previa a "iniciar / unirse": si ya hay una versión nueva descargada o en camino, no se
+ * deja entrar a la partida para que la app se reinicie y se actualice primero. Sin novedades (o si
+ * la verificación falló) se procede con normalidad.
+ */
+export function updateGateFor(phase: UpdatePhase, version?: string): UpdateGate {
+  if (phase === 'downloaded') {
+    return { proceed: false, message: 'Hay una versión nueva lista para instalarse: la aplicación se reiniciará y volverá a abrir actualizada. Esperá unos segundos y volvé a intentar.' };
+  }
+  if (phase === 'available' || phase === 'downloading') {
+    return { proceed: false, message: `Hay una versión nueva${version ? ` (v${version})` : ''} disponible: se está descargando y la aplicación se reiniciará para instalarla. Volvé a intentar cuando termine.` };
+  }
+  return { proceed: true };
+}

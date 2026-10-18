@@ -1,12 +1,12 @@
 {
   "name": "lantern-minecraft-host",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "private": true,
   "description": "Coordinador local para un servidor Minecraft compartido",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on tcp:5173 dist-electron/main.js && electron .\"",
-    "build": "tsc -p tsconfig.electron.json && vite build",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.electron.json && vite build",
     "test": "vitest run",
     "package": "pnpm build && electron-builder --win nsis --publish never",
     "release": "pnpm build && electron-builder --win nsis --publish always"
