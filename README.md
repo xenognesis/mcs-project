@@ -16,6 +16,14 @@ Requiere Node 22+ y pnpm. Ejecutar `pnpm install` y luego `pnpm dev`. Para gener
 
 Los tokens de GitHub y Discord se guardan usando el almacenamiento seguro de Electron (DPAPI en Windows). No se incluyen en el repositorio.
 
+## Lanzadores y entrada directa
+
+Lantern puede entrar directo al servidor al abrir el juego, según el launcher:
+
+- **MultiMC / Prism**: indicá `MultiMC.exe` y el ID de instancia. Lantern ejecuta `MultiMC.exe --launch <instancia> --server <ip:puerto>`.
+- **GDLauncher**: no expone línea de comandos ni deep-links para abrir una instancia en un servidor, así que se usa su **Wrapper Command** (Ajustes → Custom Commands). Lantern deja un script en `%APPDATA%\lantern-minecraft-host\gdlauncher\lantern-join.cmd` y mantiene la dirección del servidor activo en `join-target.txt`. Pegá en **Wrapper Command** la ruta que muestra la pantalla *Configuración* (una sola vez); desde entonces, con un servidor activo, al abrir el juego entrará solo vía `--quickPlayMultiplayer`. Si no hay servidor activo, el juego abre normal. El wrapper se puede acotar a una sola instancia usando el override por instancia en lugar del ajuste global.
+- **Otro launcher**: activá *Iniciar Minecraft manualmente*; Lantern copia la dirección al portapapeles.
+
 ## Comandos de Discord
 
 Mientras alguien aloja el servidor, el bot expone estos comandos slash (respuestas **efímeras**: sólo las ve quien los ejecuta):

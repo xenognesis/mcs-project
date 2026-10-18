@@ -49,6 +49,7 @@ export type PackManifest = {
 };
 
 export type Requirement = { name: string; ok: boolean; detail: string };
+export type GdLauncherInfo = { script: string; command: string; target: string | null };
 export type AppStatus = {
   requirements: Requirement[];
   lease: Lease | null;
@@ -59,4 +60,5 @@ export type AppStatus = {
   logs: string[];
   consoleUnlocked: boolean;
   hasAdminSecret: boolean;
+  gdLauncher: GdLauncherInfo;
 };
