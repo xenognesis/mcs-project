@@ -47,3 +47,12 @@
 .busy-card p { margin: 0; color: #eef2e8; font-size: 14px; line-height: 1.5; }
 .spinner { width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; border: 3px solid #f4d27933; border-top-color: #f4d279; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.quiet.version { font: 11px 'DM Mono', monospace; color: #a9b7a8; letter-spacing: .04em; }
+.update-bar { display: flex; align-items: center; gap: 14px; padding: 11px 5vw; background: #12281f; border-bottom: 1px solid rgba(234,240,225,.14); color: #cdd8ca; font-size: 13px; }
+.update-bar > span:first-child { flex: 1; }
+.update-bar.ok { color: #a9e8bb; }
+.update-bar.ready { background: #1a3a2b; color: #eef2e8; }
+.update-bar.error { background: #3a1f1c; color: #ffb8a3; }
+.update-bar.error .quiet { color: #ffd9cb; border-color: #733333; }
+.update-progress { position: relative; width: 220px; height: 6px; border-radius: 999px; background: #0e1c15; overflow: hidden; }
+.update-progress i { position: absolute; inset: 0 auto 0 0; background: #e5c675; transition: width .25s ease; }

@@ -4,7 +4,7 @@ Aplicación Electron para que tres amigos operen un servidor Minecraft Java modd
 
 ## Desarrollo
 
-Requiere Node 22+ y pnpm. Ejecutar `pnpm install` y luego `pnpm dev`. Para generar el instalador Windows: `pnpm package`.
+Requiere Node 22+ y pnpm. Ejecutar `pnpm install` y luego `pnpm dev`. Para generar el instalador Windows: `pnpm package`. Para publicar una versión nueva: `pnpm release` (requiere `GH_TOKEN`, ver *Actualizaciones*).
 
 ## Preparación compartida
 
@@ -23,6 +23,26 @@ Lantern puede entrar directo al servidor al abrir el juego, según el launcher:
 - **MultiMC / Prism**: indicá `MultiMC.exe` y el ID de instancia. Lantern ejecuta `MultiMC.exe --launch <instancia> --server <ip:puerto>`.
 - **GDLauncher**: no expone línea de comandos ni deep-links para abrir una instancia en un servidor, así que se usa su **Wrapper Command** (Ajustes → Custom Commands). Lantern deja un script en `%APPDATA%\lantern-minecraft-host\gdlauncher\lantern-join.cmd` y mantiene la dirección del servidor activo en `join-target.txt`. Pegá en **Wrapper Command** la ruta que muestra la pantalla *Configuración* (una sola vez); desde entonces, con un servidor activo, al abrir el juego entrará solo vía `--quickPlayMultiplayer`. Si no hay servidor activo, el juego abre normal. El wrapper se puede acotar a una sola instancia usando el override por instancia en lugar del ajuste global.
 - **Otro launcher**: activá *Iniciar Minecraft manualmente*; Lantern copia la dirección al portapapeles.
+
+## Actualizaciones
+
+La app se actualiza sola desde los **GitHub Releases** de su propio repositorio (`xenognesis/msc-project`). Al arrancar comprueba en segundo plano; si hay una versión más nueva la descarga, y cuando el **servidor está detenido** se reinicia sola para instalarla y vuelve a abrir. Si hay un servidor en línea, la instalación queda pendiente y se aplica al cerrar la app, para no cortar la partida. También se puede forzar desde el botón de la versión en la barra superior.
+
+Para que funcione en cada PC hace falta un **Token GitHub (actualizaciones)** con permiso de **lectura de Releases** (Contents: read) sobre `xenognesis/msc-project`. Si se deja vacío, se reutiliza el token de sincronización del pack. Sin token, la verificación automática se omite en silencio (el detalle queda en la bitácora).
+
+Para publicar una versión nueva:
+
+1. Subir `version` en `package.json` (semver, sin la `v`).
+2. Definir el token con permiso de escritura sobre Releases y ejecutar:
+
+   ```powershell
+   $env:GH_TOKEN = "ghp_..."   # token con scope repo (o Contents: write)
+   pnpm release
+   ```
+
+   `pnpm release` compila, genera el instalador y sube a GitHub el `.exe`, su `.blockmap` y `latest.yml`. El release se publica (no borrador), que es lo que el actualizador consulta vía `/releases/latest`.
+
+Las instalaciones existentes se actualizan solas a partir de esa publicación.
 
 ## Comandos de Discord
 

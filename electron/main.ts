@@ -10,7 +10,11 @@ import { publishManifest, syncPack } from './pack';
 import { MinecraftServer } from './server';
 import { hasStoredAdminSecret, isSessionUnlocked, saveAdminSecret, setSessionUnlocked, tryAutoUnlock, verifyAdminPassword } from './security';
 import type { AppConfig, AppStatus, GdLauncherInfo, Lease, PackManifest } from './types';
+import { createUpdater, type Updater } from './updater';
 import { archiveThenRestore, hashDirectory, listBackups, publishWorldState, readPublishedHash, snapshot, worldPaths } from './world';
+
+// Repositorio desde el que la app se actualiza (GitHub Releases del propio proyecto).
+const UPDATE_REPO = { owner: 'xenognesis', repo: 'msc-project' };
 
 let window: BrowserWindow | null = null;
 const configStore = new ConfigStore();
@@ -19,6 +23,7 @@ let sessionId: string | null = null;
 let heartbeat: NodeJS.Timeout | null = null;
 let backups: NodeJS.Timeout | null = null;
 let isQuitting = false;
+let updater: Updater | null = null;
 const logs: string[] = [];
 const appendLog = (line: string) => { logs.push(`${new Date().toLocaleTimeString()}  ${line}`); if (logs.length > 300) logs.shift(); window?.webContents.send('log', logs.at(-1)); };
 const server = new MinecraftServer(appendLog, (state) => window?.webContents.send('server-state', state));
@@ -68,7 +73,7 @@ async function status(): Promise<AppStatus> {
       : { name: 'MultiMC', ok: Boolean(config.multiMcPath), detail: config.multiMcPath || 'Indicá MultiMC.exe.' },
     { name: 'Radmin VPN', ok: Boolean(findRadminIp()), detail: findRadminIp() ?? 'No se detectó el adaptador Radmin.' }
   ];
-  return { requirements, lease, localWorldHash, publishedWorldHash, radminIp: findRadminIp(), server: server.status, logs, consoleUnlocked, hasAdminSecret, gdLauncher };
+  return { requirements, lease, localWorldHash, publishedWorldHash, radminIp: findRadminIp(), server: server.status, logs, consoleUnlocked, hasAdminSecret, gdLauncher, version: app.getVersion(), update: updater?.state() ?? { phase: 'idle' } };
 }
 function assertWorldSynced(local: string | null, published: string | null) {
   if (!local && !published) return;
@@ -202,6 +207,20 @@ app.whenReady().then(async () => {
   ipcMain.handle('clipboard:copy-ip', () => { const ip = findRadminIp(); if (ip) clipboard.writeText(ip); return ip; });
   ipcMain.handle('clipboard:write', (_event, text: string) => { clipboard.writeText(String(text ?? '')); return true; });
   ipcMain.handle('lease:recover-check', async () => { const lease = (await currentLease())?.value; return lease ? { stale: isStale(lease), reachable: await canReach(lease.ip, lease.port), lease } : null; });
+  updater = createUpdater({
+    currentVersion: app.getVersion(),
+    packaged: app.isPackaged,
+    repo: UPDATE_REPO,
+    token: config.updateToken || config.githubToken || '',
+    onState: (state) => window?.webContents.send('update-state', state),
+    serverRunning: () => server.status !== 'stopped',
+    log: appendLog
+  });
+  ipcMain.handle('update:check', async () => { await updater?.check(true); return status(); });
+  ipcMain.handle('update:install', async () => { if (!updater) throw new Error('El actualizador no está disponible.'); updater.install(); return status(); });
+  // Verificación silenciosa al arrancar: si hay una versión nueva se descarga y, con el servidor
+  // detenido, la app se reinicia sola para instalarla.
+  setTimeout(() => { void updater?.check(false); }, 4000);
   app.on('before-quit', (event) => {
     if (isQuitting || server.status === 'stopped') return;
     event.preventDefault(); isQuitting = true;

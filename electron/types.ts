@@ -10,6 +10,7 @@ export type AppConfig = {
   discordGuildId?: string;
   trackerDataPath?: string;
   githubToken?: string;
+  updateToken?: string;
   packRepo: RepoRef;
   coordinationRepo: RepoRef;
   driveRoot: string;
@@ -50,6 +51,18 @@ export type PackManifest = {
 
 export type Requirement = { name: string; ok: boolean; detail: string };
 export type GdLauncherInfo = { script: string; command: string; target: string | null };
+export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error';
+export type UpdateState = {
+  phase: UpdatePhase;
+  /** Versión que ofrece el repositorio (en fases available/downloading/downloaded) o la instalada. */
+  version?: string;
+  /** Progreso de descarga 0-100. */
+  percent?: number;
+  /** Detalle legible del progreso (ej. "12,4 MB de 108 MB"). */
+  detail?: string;
+  /** Mensaje de error, sólo en la fase `error`. */
+  message?: string;
+};
 export type AppStatus = {
   requirements: Requirement[];
   lease: Lease | null;
@@ -61,4 +74,6 @@ export type AppStatus = {
   consoleUnlocked: boolean;
   hasAdminSecret: boolean;
   gdLauncher: GdLauncherInfo;
+  version: string;
+  update: UpdateState;
 };

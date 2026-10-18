@@ -1,6 +1,6 @@
 {
   "name": "lantern-minecraft-host",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Coordinador local para un servidor Minecraft compartido",
   "main": "dist-electron/main.js",
@@ -8,10 +8,12 @@
     "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on tcp:5173 dist-electron/main.js && electron .\"",
     "build": "tsc -p tsconfig.electron.json && vite build",
     "test": "vitest run",
-    "package": "pnpm build && electron-builder --win nsis"
+    "package": "pnpm build && electron-builder --win nsis --publish never",
+    "release": "pnpm build && electron-builder --win nsis --publish always"
   },
   "dependencies": {
     "discord.js": "^14.27.0",
+    "electron-updater": "^6.8.9",
     "react": "latest",
     "react-dom": "latest"
   },
@@ -38,6 +40,14 @@
       "dist/**",
       "dist-electron/**",
       "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "xenognesis",
+        "repo": "msc-project",
+        "releaseType": "release"
+      }
     ]
   },
   "packageManager": "pnpm@12.4.1+sha512.2e81e399d73fe8390dab25e06aa788ab7a5908248d2f5a370f82b481147a6a7a367bf8048f9a6fdb6460f21a66f0542dedb8b94ca2c8723596741920b1656d4c"
