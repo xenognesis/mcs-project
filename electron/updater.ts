@@ -33,6 +33,7 @@ export type Updater = {
 export function createUpdater(options: UpdaterOptions): Updater {
   let state: UpdateState = { phase: 'idle' };
   let manualCheck = false;
+  let installing = false;
   const setState = (next: UpdateState) => { state = next; options.onState(next); };
 
   if (!options.packaged) {
@@ -77,11 +78,19 @@ export function createUpdater(options: UpdaterOptions): Updater {
   });
 
   function install() {
+    if (installing) return;
     if (state.phase !== 'downloaded') { options.log('[Actualización] Todavía no hay una versión descargada.'); return; }
     if (options.serverRunning()) { options.log('[Actualización] No se instala con el servidor en línea.'); return; }
+    installing = true;
     // quitAndInstall(silent, forceRunAfter): cierra la app, ejecuta el instalador sin asistente y
-    // vuelve a abrirla con la versión nueva.
-    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+    // vuelve a abrirla con la versión nueva. Si algo falla aquí, se registra en vez de romper el cierre.
+    setImmediate(() => {
+      try { autoUpdater.quitAndInstall(true, true); }
+      catch (error) {
+        installing = false;
+        options.log(`[Actualización] No se pudo iniciar la instalación: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
   }
 
   async function check(manual: boolean): Promise<UpdateState> {

@@ -24,8 +24,15 @@ let backups: NodeJS.Timeout | null = null;
 let isQuitting = false;
 let updater: Updater | null = null;
 const logs: string[] = [];
-const appendLog = (line: string) => { logs.push(`${new Date().toLocaleTimeString()}  ${line}`); if (logs.length > 300) logs.shift(); window?.webContents.send('log', logs.at(-1)); };
-const server = new MinecraftServer(appendLog, (state) => window?.webContents.send('server-state', state));
+// Durante el cierre por actualización o al salir, la ventana ya puede estar destruida: enviar a una
+// instancia destruida lanza "Object has been destroyed" y Electron muestra un diálogo de error.
+const send = (channel: string, payload: unknown) => { if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, payload); };
+const appendLog = (line: string) => { logs.push(`${new Date().toLocaleTimeString()}  ${line}`); if (logs.length > 300) logs.shift(); send('log', logs.at(-1)); };
+const server = new MinecraftServer(appendLog, (state) => send('server-state', state));
+// Electron muestra un diálogo ante excepciones no atrapadas del proceso principal (por ejemplo al
+// cerrar para instalar una actualización). Las registramos en la bitácora para poder diagnosticarlas.
+process.on('uncaughtException', (error) => appendLog(`[Error] ${error instanceof Error ? error.message : String(error)}`));
+process.on('unhandledRejection', (reason) => appendLog(`[Error] ${reason instanceof Error ? reason.message : String(reason)}`));
 
 function createWindow() {
   window = new BrowserWindow({ width: 1240, height: 800, minWidth: 960, minHeight: 650, backgroundColor: '#12221d', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false } });
@@ -179,7 +186,7 @@ app.whenReady().then(async () => {
     currentVersion: app.getVersion(),
     packaged: app.isPackaged,
     repo: UPDATE_REPO,
-    onState: (state) => window?.webContents.send('update-state', state),
+    onState: (state) => send('update-state', state),
     serverRunning: () => server.status !== 'stopped',
     log: appendLog
   });
@@ -191,7 +198,9 @@ app.whenReady().then(async () => {
   app.on('before-quit', (event) => {
     if (isQuitting || server.status === 'stopped') return;
     event.preventDefault(); isQuitting = true;
-    void endServer().finally(() => app.quit());
+    void endServer()
+      .catch((error) => appendLog(`[Cierre] No se pudo cerrar el servidor: ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => app.quit());
   });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
