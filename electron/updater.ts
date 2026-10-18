@@ -5,10 +5,10 @@ import type { UpdateState } from './types';
 
 // Auto-actualización vía GitHub Releases del propio repositorio de la aplicación.
 //
-// El repo es privado, así que se configura el provider de GitHub en tiempo de ejecución con un
-// token (`private: true` + `token`), lo que hace que electron-updater use la API con autenticación
-// en lugar de las URLs públicas de descarga. El token de publishing NUNCA se embebe en el binario:
-// se lee de la configuración local (cifrada con DPAPI) en cada arranque.
+// El repositorio es público, así que se usa el provider público de GitHub de electron-updater
+// (sin `private` ni token): la versión y el instalador se descargan por HTTPS sin credenciales.
+// Los tokens de GitHub de la app quedan reservados sólo para los repositorios privados del pack
+// y de la coordinación.
 
 export type UpdaterRepo = { owner: string; repo: string };
 
@@ -18,8 +18,6 @@ export type UpdaterOptions = {
   /** app.isPackaged: fuera de la app instalada el updater de electron-updater queda inactivo. */
   packaged: boolean;
   repo: UpdaterRepo;
-  /** Token con permiso de lectura sobre los Releases del repo (vacío = no se puede verificar). */
-  token: string;
   onState: (state: UpdateState) => void;
   /** true mientras el servidor no está detenido: bloquea el reinicio automático. */
   serverRunning: () => boolean;
@@ -55,9 +53,7 @@ export function createUpdater(options: UpdaterOptions): Updater {
   autoUpdater.setFeedURL({
     provider: 'github',
     owner: options.repo.owner,
-    repo: options.repo.repo,
-    private: true,
-    token: options.token
+    repo: options.repo.repo
   });
 
   autoUpdater.on('checking-for-update', () => { if (manualCheck) setState({ phase: 'checking' }); });
@@ -74,7 +70,7 @@ export function createUpdater(options: UpdaterOptions): Updater {
     setTimeout(install, 2500);
   });
   autoUpdater.on('error', (error: Error) => {
-    // Un repo sin releases todavía (o sin token válido) no debe romper el arranque: sólo se avisa
+    // Un repo sin releases todavía (o sin conexión) no debe romper el arranque: sólo se avisa
     // cuando el usuario pidió la verificación a mano.
     if (!manualCheck) { options.log(`[Actualización] No se pudo verificar: ${error.message}`); setState({ phase: 'idle' }); return; }
     setState({ phase: 'error', message: error.message });
@@ -90,11 +86,6 @@ export function createUpdater(options: UpdaterOptions): Updater {
 
   async function check(manual: boolean): Promise<UpdateState> {
     manualCheck = manual;
-    if (!options.token) {
-      if (manual) setState({ phase: 'error', message: 'Falta el token de GitHub para buscar actualizaciones.' });
-      else options.log('[Actualización] Sin token configurado; se omite la verificación automática.');
-      return state;
-    }
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {

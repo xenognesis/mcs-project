@@ -11,7 +11,7 @@ declare global {
   }
   type Player = { name: string; discordId: string };
   type RepoRef = { owner: string; repo: string; branch?: string };
-  type AppConfig = { playerName: string; isAdmin: boolean; discordBotToken?: string; discordChannelId?: string; discordGuildId?: string; trackerDataPath?: string; githubToken?: string; updateToken?: string; adminPassword?: string; adminDiscordId?: string; manualLauncher?: boolean; clientInstancePath?: string; packRepo: RepoRef; coordinationRepo: RepoRef; driveRoot: string; multiMcPath: string; multiMcInstance: string; javaPath: string; serverJar: string; serverMemoryMb: number; port: number; players: Player[]; backupIntervalMinutes: number; backupRetention: number; timeZone: string };
+  type AppConfig = { playerName: string; isAdmin: boolean; discordBotToken?: string; discordChannelId?: string; discordGuildId?: string; trackerDataPath?: string; githubToken?: string; adminPassword?: string; adminDiscordId?: string; manualLauncher?: boolean; clientInstancePath?: string; packRepo: RepoRef; coordinationRepo: RepoRef; driveRoot: string; multiMcPath: string; multiMcInstance: string; javaPath: string; serverJar: string; serverMemoryMb: number; port: number; players: Player[]; backupIntervalMinutes: number; backupRetention: number; timeZone: string };
   type Lease = { hostName: string; ip: string; port: number; heartbeatAt: string; packVersion: string };
   type Requirement = { name: string; ok: boolean; detail: string };
   type GdLauncherInfo = { script: string; command: string; target: string | null };

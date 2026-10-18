@@ -10,7 +10,6 @@ export type AppConfig = {
   discordGuildId?: string;
   trackerDataPath?: string;
   githubToken?: string;
-  updateToken?: string;
   packRepo: RepoRef;
   coordinationRepo: RepoRef;
   driveRoot: string;

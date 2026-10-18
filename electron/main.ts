@@ -211,7 +211,6 @@ app.whenReady().then(async () => {
     currentVersion: app.getVersion(),
     packaged: app.isPackaged,
     repo: UPDATE_REPO,
-    token: config.updateToken || config.githubToken || '',
     onState: (state) => window?.webContents.send('update-state', state),
     serverRunning: () => server.status !== 'stopped',
     log: appendLog

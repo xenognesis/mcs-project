@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { AppConfig } from './types';
 
 const defaults: AppConfig = {
-  playerName: '', isAdmin: false, discordBotToken: '', discordChannelId: '', discordGuildId: '', trackerDataPath: '', githubToken: '', updateToken: '',
+  playerName: '', isAdmin: false, discordBotToken: '', discordChannelId: '', discordGuildId: '', trackerDataPath: '', githubToken: '',
   adminPassword: '', adminDiscordId: '', manualLauncher: false, clientInstancePath: '',
   packRepo: { owner: '', repo: 'minecraft-pack', branch: 'main' },
   coordinationRepo: { owner: '', repo: 'minecraft-coordination', branch: 'main' },
@@ -13,11 +13,10 @@ const defaults: AppConfig = {
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 
-type Persisted = Omit<AppConfig, 'githubToken' | 'discordBotToken' | 'adminPassword' | 'updateToken'> & {
+type Persisted = Omit<AppConfig, 'githubToken' | 'discordBotToken' | 'adminPassword'> & {
   githubToken?: string;
   discordBotToken?: string;
   adminPassword?: string;
-  updateToken?: string;
 };
 export class ConfigStore {
   private file = path.join(app.getPath('userData'), 'config.json');
@@ -29,8 +28,7 @@ export class ConfigStore {
         ...saved,
         githubToken: this.decrypt(saved.githubToken),
         discordBotToken: this.decrypt(saved.discordBotToken),
-        adminPassword: this.decrypt(saved.adminPassword),
-        updateToken: this.decrypt(saved.updateToken)
+        adminPassword: this.decrypt(saved.adminPassword)
       };
     } catch { return { ...defaults }; }
   }
@@ -40,8 +38,7 @@ export class ConfigStore {
       ...config,
       githubToken: this.encrypt(config.githubToken),
       discordBotToken: this.encrypt(config.discordBotToken),
-      adminPassword: this.encrypt(config.adminPassword),
-      updateToken: this.encrypt(config.updateToken)
+      adminPassword: this.encrypt(config.adminPassword)
     };
     await writeFile(this.file, JSON.stringify(stored, null, 2), 'utf8');
   }
