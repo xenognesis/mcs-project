@@ -42,7 +42,9 @@ Para publicar una versión nueva:
 
    `pnpm release` compila, genera el instalador y sube a GitHub el `.exe`, su `.blockmap` y `latest.yml`. El release se publica (no borrador), que es lo que el actualizador consulta vía `/releases/latest`.
 
-Las instalaciones existentes se actualizan solas a partir de esa publicación.
+   Si falla con **422 "Published releases must have a valid tag"**, es una carrera conocida de electron-builder: sube los tres archivos en paralelo y todos intentan crear la release a la vez. Volvé a ejecutar el mismo comando enseguida (dentro de las 2 horas): reutiliza la release ya creada y completa lo que falte. Para no depender de ese límite de 2 horas, exportá `EP_GH_IGNORE_TIME=true` antes de publicar.
+
+Las instalaciones existentes se actualizan solas a partir de esa publicación. Como el repositorio es público, esa verificación **no usa ningún token**: sólo hace falta `GH_TOKEN` para *publicar*.
 
 ## Comandos de Discord
 
