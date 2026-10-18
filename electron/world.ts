@@ -14,7 +14,7 @@ async function files(root: string, relative = ''): Promise<string[]> {
   const entries = await readdir(path.join(root, relative), { withFileTypes: true });
   const list: string[] = [];
   for (const entry of entries) {
-    if (entry.name === 'session.lock' || entry.name === 'desktop.ini' || entry.name.endsWith('.tmp') || entry.name.endsWith('.dat_old') || entry.name.startsWith('.goutputstream') || entry.name.startsWith('~')) continue;
+    if (entry.name === 'session.lock' || entry.name === 'desktop.ini' || entry.name === 'random_sequences.dat' || entry.name === 'crash-reports' || entry.name.endsWith('.tmp') || entry.name.endsWith('.dat_old') || entry.name.startsWith('.goutputstream') || entry.name.startsWith('~')) continue;
     const next = path.join(relative, entry.name);
     if (entry.isDirectory()) list.push(...await files(root, next)); else if (entry.isFile()) list.push(next);
   }

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { AppConfig } from './types';
 
 const defaults: AppConfig = {
-  playerName: '', isAdmin: false, discordBotToken: '', discordChannelId: '', githubToken: '',
+  playerName: '', isAdmin: false, discordBotToken: '', discordChannelId: '', discordGuildId: '', trackerDataPath: '', githubToken: '',
   adminPassword: '', adminDiscordId: '', manualLauncher: false, clientInstancePath: '',
   packRepo: { owner: '', repo: 'minecraft-pack', branch: 'main' },
   coordinationRepo: { owner: '', repo: 'minecraft-coordination', branch: 'main' },

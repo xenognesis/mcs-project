@@ -25,3 +25,5 @@
 .btn-link { background: none; border: none; color: #8ba38e; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
 .btn-link:hover { color: #d0ded3; }
 .console-box .field-error { padding: 0 20px 12px; margin: 0; }
+.world-card .world-publish { display: block; width: 100%; margin-top: 14px; border-color: #5f7d64; color: #e7d79b; }
+.world-card .world-publish:hover { border-color: #e5c675; }

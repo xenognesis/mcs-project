@@ -7,6 +7,8 @@ export type AppConfig = {
   isAdmin: boolean;
   discordBotToken?: string;
   discordChannelId?: string;
+  discordGuildId?: string;
+  trackerDataPath?: string;
   githubToken?: string;
   packRepo: RepoRef;
   coordinationRepo: RepoRef;

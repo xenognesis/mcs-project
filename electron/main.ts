@@ -50,7 +50,19 @@ async function status(): Promise<AppStatus> {
 }
 function assertWorldSynced(local: string | null, published: string | null) {
   if (!local && !published) return;
-  if (!local || !published || local !== published) throw new Error('El mundo local no coincide con la instantánea publicada. Sincronizá Google Drive o restaurá una copia antes de iniciar.');
+  if (!local || !published || local !== published) throw new Error('El mundo local no coincide con la instantánea publicada. Si reemplazaste el mundo a propósito, publicá el estado actual desde el botón "Publicar mundo actual"; si no, sincronizá Google Drive o restaurá una copia antes de iniciar.');
+}
+// Un arranque que llega a iniciar el servidor puede modificar el mundo (p. ej. level.dat) aunque
+// después falle. Como el estado sólo se publica en un cierre limpio, aquí lo republicamos para no
+// dejar el mundo bloqueado en el próximo intento.
+async function publishWorldIfChanged(reason: string) {
+  if (!config.driveRoot) return;
+  const local = await hashDirectory(worldPaths(config.driveRoot).world);
+  const published = await readPublishedHash(config.driveRoot);
+  if (local && local !== published) {
+    const hash = await publishWorldState(config.driveRoot, config.playerName || 'Admin');
+    appendLog(`[Mundo] Estado republicado (${reason}): ${hash.slice(0, 12)}.`);
+  }
 }
 function launchMultiMc(address: string) {
   const child = require('node:child_process').spawn(config.multiMcPath, ['--launch', config.multiMcInstance, '--server', address], { detached: true, stdio: 'ignore', windowsHide: true }); child.unref();
@@ -65,11 +77,16 @@ async function beginServer() {
   const lease: Lease = { sessionId, hostName: config.playerName, ip, port: config.port, packVersion: manifest.version, startedAt: new Date().toISOString(), heartbeatAt: new Date().toISOString() };
   if (!await github.acquireLease(config.coordinationRepo, lease)) { sessionId = null; throw new Error('Otro jugador ya mantiene el servidor activo. Usá “Unirse”.'); }
   try {
-    await server.start(config);
+    await server.start(config, ip);
     if (config.discordBotToken) {
       void startDiscordBot({
         token: config.discordBotToken,
         adminDiscordId: config.adminDiscordId,
+        channelId: config.discordChannelId,
+        guildId: config.discordGuildId,
+        driveRoot: config.driveRoot,
+        trackerDataPath: config.trackerDataPath,
+        players: config.players,
         onCommand: (cmd) => server.command(cmd),
         onLog: appendLog
       });
@@ -82,7 +99,7 @@ async function beginServer() {
     } else {
       launchMultiMc(`${ip}:${config.port}`);
     }
-  } catch (error) { await server.stop(); stopDiscordBot(); await github.releaseLease(config.coordinationRepo, sessionId); sessionId = null; throw error; }
+  } catch (error) { await server.stop(); stopDiscordBot(); try { await publishWorldIfChanged('arranque fallido'); } catch (publishError) { appendLog(`No se pudo republicar el mundo: ${publishError instanceof Error ? publishError.message : String(publishError)}`); } await github.releaseLease(config.coordinationRepo, sessionId); sessionId = null; throw error; }
 }
 async function endServer() {
   if (!sessionId) return;
@@ -113,6 +130,14 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('sync', async () => { const manifest = await syncPack(config, appendLog); return { manifest, status: await status() }; });
   ipcMain.handle('pack:publish', async (_event, manifest: PackManifest) => { await publishManifest(config, manifest); return manifest; });
+  ipcMain.handle('world:publish', async () => {
+    if (server.status !== 'stopped') throw new Error('Detené el servidor antes de publicar el estado del mundo.');
+    if (!config.driveRoot) throw new Error('Configurá la carpeta compartida de Google Drive antes de publicar el mundo.');
+    if (!isSessionUnlocked()) throw new Error('Se requiere la clave maestra de administrador. Desbloqueá la consola y volvé a intentar.');
+    const hash = await publishWorldState(config.driveRoot, config.playerName || 'Admin');
+    appendLog(`[Mundo] Estado actual publicado manualmente (hash ${hash.slice(0, 12)}).`);
+    return status();
+  });
   ipcMain.handle('server:start', async () => { await beginServer(); return status(); });
   ipcMain.handle('server:stop', async () => { await endServer(); return status(); });
   ipcMain.handle('server:join', async () => {

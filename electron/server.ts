@@ -1,17 +1,37 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppConfig } from './types';
+
+// El server.properties vive en la carpeta compartida, así que un `server-ip` fijado
+// por el host anterior rompería el arranque en cualquier otra PC. Lo reescribimos con
+// la IP de Radmin del host actual para que el bind siempre sea válido.
+export async function bindToRadminIp(config: AppConfig, ip: string) {
+  const file = path.join(config.driveRoot, 'server.properties');
+  let content: string;
+  try { content = await readFile(file, 'utf8'); } catch { return; }
+  const desired = `server-ip=${ip}`;
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  let replaced = false;
+  const lines = content.split(/\r?\n/).map((line) => {
+    if (/^server-ip=/.test(line)) { replaced = true; return desired; }
+    return line;
+  });
+  if (!replaced) lines.push(desired);
+  const output = lines.join(eol);
+  if (output !== content) await writeFile(file, output, 'utf8');
+}
 
 export class MinecraftServer {
   private process: ChildProcessWithoutNullStreams | null = null;
   private state: 'stopped' | 'starting' | 'running' | 'stopping' = 'stopped';
   constructor(private readonly onLog: (line: string) => void, private readonly onState: (state: typeof this.state) => void) {}
   get status() { return this.state; }
-  async start(config: AppConfig) {
+  async start(config: AppConfig, bindIp?: string) {
     if (this.process) throw new Error('El servidor ya está iniciado.');
     const jar = path.isAbsolute(config.serverJar) ? config.serverJar : path.join(config.driveRoot, config.serverJar);
     await access(jar);
+    if (bindIp) await bindToRadminIp(config, bindIp);
     this.setState('starting');
     // El directorio de trabajo siempre es la raíz compartida: Minecraft crea allí
     // world/, mods/, config/ y server.properties, que son los directorios que
