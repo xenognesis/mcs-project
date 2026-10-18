@@ -49,7 +49,6 @@ export type PackManifest = {
 };
 
 export type Requirement = { name: string; ok: boolean; detail: string };
-export type GdLauncherInfo = { script: string; command: string; target: string | null };
 export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'current' | 'error';
 export type UpdateState = {
   phase: UpdatePhase;
@@ -72,7 +71,6 @@ export type AppStatus = {
   logs: string[];
   consoleUnlocked: boolean;
   hasAdminSecret: boolean;
-  gdLauncher: GdLauncherInfo;
   version: string;
   update: UpdateState;
 };

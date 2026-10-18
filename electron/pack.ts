@@ -25,11 +25,9 @@ export async function syncPack(config: AppConfig, log: (message: string) => void
     if (config.manualLauncher) {
       if (config.clientInstancePath) {
         clientRoot = config.clientInstancePath;
-      } else {
-        if (file.scope === 'client') {
-          log(`Omitiendo ${file.path} (launcher manual sin ruta de instancia especificada)`);
-          continue;
-        }
+      } else if (file.scope === 'client') {
+        log(`Omitiendo ${file.path} (modo manual sin carpeta de instancia)`);
+        continue;
       }
     } else if (config.multiMcPath) {
       // MultiMC almacena los archivos de juego de una instancia dentro de .minecraft.

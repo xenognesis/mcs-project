@@ -18,11 +18,9 @@ Los tokens de GitHub y Discord se guardan usando el almacenamiento seguro de Ele
 
 ## Lanzadores y entrada directa
 
-Lantern puede entrar directo al servidor al abrir el juego, según el launcher:
+Lantern entra directo al servidor al abrir el juego con **MultiMC / Prism**: indicá `MultiMC.exe` y el ID de instancia en la configuración; Lantern ejecuta `MultiMC.exe --launch <instancia> --server <ip:puerto>`.
 
-- **MultiMC / Prism**: indicá `MultiMC.exe` y el ID de instancia. Lantern ejecuta `MultiMC.exe --launch <instancia> --server <ip:puerto>`.
-- **GDLauncher**: no expone línea de comandos ni deep-links para abrir una instancia en un servidor, así que se usa su **Wrapper Command** (Ajustes → Custom Commands). Lantern deja un script en `%APPDATA%\lantern-minecraft-host\gdlauncher\lantern-join.cmd` y mantiene la dirección del servidor activo en `join-target.txt`. Pegá en **Wrapper Command** la ruta que muestra la pantalla *Configuración* (una sola vez); desde entonces, con un servidor activo, al abrir el juego entrará solo vía `--quickPlayMultiplayer`. Si no hay servidor activo, el juego abre normal. El wrapper se puede acotar a una sola instancia usando el override por instancia en lugar del ajuste global.
-- **Otro launcher**: activá *Iniciar Minecraft manualmente*; Lantern copia la dirección al portapapeles.
+Con **cualquier otro launcher** (por ejemplo GDLauncher), activá *Iniciar Minecraft manualmente* en la configuración: MultiMC deja de ser obligatorio, Lantern copia la IP al portapapeles al iniciar o unirse y el juego se abre a mano. Opcionalmente indicá la carpeta de la instancia del launcher para que el pack sincronice ahí los mods del cliente.
 
 ## Actualizaciones
 
