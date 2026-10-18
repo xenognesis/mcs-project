@@ -45,7 +45,7 @@
       {
         "provider": "github",
         "owner": "xenognesis",
-        "repo": "msc-project",
+        "repo": "mcs-project",
         "releaseType": "release"
       }
     ]

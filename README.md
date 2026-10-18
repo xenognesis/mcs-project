@@ -26,9 +26,9 @@ Lantern puede entrar directo al servidor al abrir el juego, según el launcher:
 
 ## Actualizaciones
 
-La app se actualiza sola desde los **GitHub Releases** de su propio repositorio (`xenognesis/msc-project`). Al arrancar comprueba en segundo plano; si hay una versión más nueva la descarga, y cuando el **servidor está detenido** se reinicia sola para instalarla y vuelve a abrir. Si hay un servidor en línea, la instalación queda pendiente y se aplica al cerrar la app, para no cortar la partida. También se puede forzar desde el botón de la versión en la barra superior.
+La app se actualiza sola desde los **GitHub Releases** de su propio repositorio (`xenognesis/mcs-project`). Al arrancar comprueba en segundo plano; si hay una versión más nueva la descarga, y cuando el **servidor está detenido** se reinicia sola para instalarla y vuelve a abrir. Si hay un servidor en línea, la instalación queda pendiente y se aplica al cerrar la app, para no cortar la partida. También se puede forzar desde el botón de la versión en la barra superior.
 
-No hace falta ningún token para actualizar: el repositorio `xenognesis/msc-project` es **público**, así que la app lee las Releases sin credenciales. Los tokens de GitHub de cada PC se usan únicamente para los repositorios **privados** del pack y de la coordinación. (Si el repo volviera a ser privado, la verificación automática fallaría en silencio: habría que volver al modo autenticado.)
+No hace falta ningún token para actualizar: el repositorio `xenognesis/mcs-project` es **público**, así que la app lee las Releases sin credenciales. Los tokens de GitHub de cada PC se usan únicamente para los repositorios **privados** del pack y de la coordinación. (Si el repo volviera a ser privado, la verificación automática fallaría en silencio: habría que volver al modo autenticado.)
 
 Para publicar una versión nueva:
 

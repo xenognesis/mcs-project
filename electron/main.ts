@@ -14,7 +14,7 @@ import { createUpdater, type Updater } from './updater';
 import { archiveThenRestore, hashDirectory, listBackups, publishWorldState, readPublishedHash, snapshot, worldPaths } from './world';
 
 // Repositorio desde el que la app se actualiza (GitHub Releases del propio proyecto).
-const UPDATE_REPO = { owner: 'xenognesis', repo: 'msc-project' };
+const UPDATE_REPO = { owner: 'xenognesis', repo: 'mcs-project' };
 
 let window: BrowserWindow | null = null;
 const configStore = new ConfigStore();
