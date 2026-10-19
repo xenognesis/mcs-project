@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ConfigStore } from './config';
@@ -92,15 +92,37 @@ function resolveRadminExe(): string | null {
   return radminExeCandidates().find((candidate) => existsSync(candidate)) ?? null;
 }
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-// Enciende Radmin VPN si todavía no hay adaptador y espera a que aparezca (hasta `timeoutMs`).
-// Lanzar el GUI cuando ya está abierto sólo le da foco; Windows no abre una segunda instancia.
+// Radmin VPN es de instancia única: miramos la lista de procesos para no relanzarlo en cada clic.
+function isRadminGuiRunning(image: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile('tasklist.exe', ['/FI', `IMAGENAME eq ${image}`, '/NH'], { windowsHide: true }, (error, stdout) => {
+      resolve(!error && stdout.toLowerCase().includes(image.toLowerCase()));
+    });
+  });
+}
+// Deja Radmin VPN encendido y visible: si la ventana no está abierta la lanza con `/show` y, cuando
+// hace falta, espera a que aparezca el adaptador (hasta `timeoutMs`).
+// Ojo: cerrar la ventana NO apaga el adaptador (lo mantiene el servicio RvControlSvc), así que no
+// alcanza con mirar la IP: si el GUI no está corriendo lo abrimos igual, aunque ya haya adaptador.
 async function ensureRadminVpn(timeoutMs = 20_000): Promise<boolean> {
-  if (findRadminIp()) return true;
+  const adapterUp = Boolean(findRadminIp());
   const exe = resolveRadminExe();
-  if (!exe) { appendLog('[Radmin] No se encontró Radmin VPN: indicá la ruta del ejecutable en Configuración.'); return false; }
-  appendLog('[Radmin] Encendiendo Radmin VPN…');
-  try { spawn(exe, [], { detached: true, stdio: 'ignore' }).unref(); }
-  catch (error) { appendLog(`[Radmin] No se pudo abrir: ${error instanceof Error ? error.message : String(error)}`); return false; }
+  if (!exe) {
+    if (adapterUp) return true;
+    appendLog('[Radmin] No se encontró Radmin VPN: indicá la ruta del ejecutable en Configuración.');
+    return false;
+  }
+  if (!await isRadminGuiRunning(path.basename(exe))) {
+    appendLog('[Radmin] Encendiendo Radmin VPN…');
+    try {
+      // `/show` abre la ventana (sin el flag arranca minimizado en la bandeja) y el cwd es necesario
+      // porque es una app Qt que busca sus plugins en su propia carpeta.
+      spawn(exe, ['/show'], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).unref();
+    } catch (error) {
+      appendLog(`[Radmin] No se pudo abrir: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (adapterUp) return true;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await delay(1_000);
