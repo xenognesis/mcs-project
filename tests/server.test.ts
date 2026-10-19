@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { bindToRadminIp } from '../electron/server';
+import { bindToRadminIp, MinecraftServer } from '../electron/server';
 import type { AppConfig } from '../electron/types';
 
 describe('electron/server bindToRadminIp', () => {
@@ -44,5 +44,25 @@ describe('electron/server bindToRadminIp', () => {
 
   it('no falla si el archivo no existe', async () => {
     await expect(bindToRadminIp(config(), '3.3.3.3')).resolves.toBeUndefined();
+  });
+});
+
+describe('electron/server MinecraftServer.start', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'lantern-server-start-'));
+    await writeFile(path.join(root, 'server.jar'), 'no-es-un-jar-real', 'utf8');
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('falla rápido y describe el motivo si el ejecutable de Java no existe', async () => {
+    const server = new MinecraftServer(() => undefined, () => undefined);
+    const settings = { driveRoot: root, serverJar: 'server.jar', javaPath: 'lantern-no-existe-xyz', serverMemoryMb: 1024 } as AppConfig;
+    await expect(server.start(settings)).rejects.toThrow(/Últimas líneas/);
+    expect(server.status).toBe('stopped');
   });
 });

@@ -36,22 +36,52 @@ export class MinecraftServer {
     // El directorio de trabajo siempre es la raíz compartida: Minecraft crea allí
     // world/, mods/, config/ y server.properties, que son los directorios que
     // sincroniza y respalda Lantern.
+    this.onLog('[Servidor] Iniciando Java…');
     const child = spawn(config.javaPath, [`-Xms${Math.min(1024, config.serverMemoryMb)}M`, `-Xmx${config.serverMemoryMb}M`, '-jar', jar, 'nogui'], { cwd: config.driveRoot, windowsHide: true });
     this.process = child;
     let ready = false;
+    // Guardamos las últimas líneas para poder explicar por qué no arrancó (EULA, Java, mods, puerto…)
+    // en lugar de devolver sólo un "no quedó listo".
+    const tail: string[] = [];
+    const excerpt = () => (tail.length ? tail.slice(-3).join(' | ') : 'sin salida del servidor');
+    // El stdout llega en chunks arbitrarios: se acumula y se corta por líneas completas para no
+    // perder una línea (p. ej. "Done (...)") que quede partida entre dos chunks.
+    let buffer = '';
     const receive = (data: Buffer) => {
-      for (const line of data.toString().split(/\r?\n/).filter(Boolean)) {
+      buffer += data.toString();
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines.filter(Boolean)) {
         this.onLog(line);
+        tail.push(line); if (tail.length > 30) tail.shift();
         if (!ready && /Done \(.+\)!|For help, type/i.test(line)) { ready = true; this.setState('running'); }
       }
     };
     child.stdout.on('data', receive); child.stderr.on('data', receive);
-    child.once('exit', (code) => { this.onLog(`Proceso del servidor finalizó (${code ?? 'sin código'}).`); this.process = null; this.setState('stopped'); });
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('El servidor no quedó listo en 90 segundos.')), 90_000);
-      const interval = setInterval(() => { if (this.state === 'running') { clearInterval(interval); clearTimeout(timeout); resolve(); } }, 200);
-      child.once('error', (error) => { clearInterval(interval); clearTimeout(timeout); reject(error); });
+    child.once('exit', (code) => {
+      if (buffer.trim()) this.onLog(buffer);
+      this.onLog(`Proceso del servidor finalizó (${code ?? 'sin código'}).`);
+      this.process = null; this.setState('stopped');
     });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // Modpacks grandes tardan en cargar desde Drive: damos margen generoso antes de rendirnos.
+        const timeout = setTimeout(() => reject(new Error('El servidor no quedó listo en 180 segundos.')), 180_000);
+        const interval = setInterval(() => { if (this.state === 'running') { clearInterval(interval); clearTimeout(timeout); resolve(); } }, 200);
+        child.once('error', (error) => { clearInterval(interval); clearTimeout(timeout); reject(error); });
+        // Si el proceso termina mientras seguimos esperando, no aguardamos el tiempo completo: es un fallo de arranque.
+        child.once('exit', (code) => {
+          clearInterval(interval); clearTimeout(timeout);
+          reject(new Error(ready ? `El servidor finalizó apenas arrancó (código ${code ?? 'sin código'}).` : `El servidor terminó antes de estar listo (código ${code ?? 'sin código'}).`));
+        });
+      });
+    } catch (error) {
+      // No dejamos procesos colgados y adjuntamos el motivo real a lo que ya se ve en la bitácora.
+      try { child.kill(); } catch { /* ya terminó */ }
+      this.process = null; this.setState('stopped');
+      const base = error instanceof Error ? error.message : String(error);
+      throw new Error(`${base} Últimas líneas: ${excerpt()}`);
+    }
   }
   command(command: string) { if (this.process) this.process.stdin.write(`${command}\n`); }
   async backupBarrier(action: () => Promise<void>) { this.command('save-all flush'); this.command('save-off'); await new Promise((resolve) => setTimeout(resolve, 500)); try { await action(); } finally { this.command('save-on'); } }
