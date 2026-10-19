@@ -13,7 +13,7 @@ Requiere Node 22+ y pnpm. Ejecutar `pnpm install` y luego `pnpm dev`. Para gener
 3. Publicar en el repositorio de pack un `manifest.json`. Cada archivo declara `path`, `sha256`, `url` y opcionalmente `scope` (`server` o `client`); la aplicación descarga sólo los que difieren. Los archivos `client` se instalan en la instancia MultiMC configurada. El manifiesto debe declarar `loader: "fabric"`, `minecraftVersion`, `serverJar`, `clientArchive` y `files`.
 4. Crear un bot Discord, invitarlo al servidor privado que comparten los jugadores y configurar los Discord IDs. Al invitarlo, incluí los scopes `bot` **y** `applications.commands` (permisos *Send Messages* y *Embed Links*) para que funcionen los comandos slash. Todos deben permitir DMs del servidor.
 5. Configurar MultiMC, iniciar sesión con una cuenta Microsoft propia y crear/importar una instancia con el ID indicado en Lantern.
-6. Instalar [Radmin VPN](https://www.radmin-vpn.com/) y unirse a la misma red privada en las tres PCs. Si está apagado, Lantern lo abre solo al pulsar *Iniciar servidor* o *Unirse* y espera a que aparezca el adaptador. Si el ejecutable no está en la ruta típica, se puede indicar en la configuración.
+6. Instalar [Radmin VPN](https://www.radmin-vpn.com/) y unirse a la misma red privada en las tres PCs. Si está apagado, Lantern lo enciende solo al pulsar *Iniciar servidor* o *Unirse*: abre la ventana y acciona su botón de encendido, y espera a que quede en línea. Si el ejecutable no está en la ruta típica, se puede indicar en la configuración.
 
 Los tokens de GitHub y Discord se guardan usando el almacenamiento seguro de Electron (DPAPI en Windows). No se incluyen en el repositorio.
 

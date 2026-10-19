@@ -8,6 +8,7 @@ import { notifyPlayers, startDiscordBot, stopDiscordBot } from './discord';
 import { GitHubClient, isStale } from './github';
 import { findRadminIp, canReach, radminExeCandidates } from './network';
 import { publishManifest, syncPack } from './pack';
+import { runRadminPower } from './radmin';
 import { MinecraftServer } from './server';
 import { hasStoredAdminSecret, isSessionUnlocked, saveAdminSecret, setSessionUnlocked, tryAutoUnlock, verifyAdminPassword } from './security';
 import type { AppConfig, AppStatus, Lease, PackManifest } from './types';
@@ -91,7 +92,6 @@ function resolveRadminExe(): string | null {
   if (custom && existsSync(custom)) return custom;
   return radminExeCandidates().find((candidate) => existsSync(candidate)) ?? null;
 }
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 // Radmin VPN es de instancia única: miramos la lista de procesos para no relanzarlo en cada clic.
 function isRadminGuiRunning(image: string): Promise<boolean> {
   return new Promise((resolve) => {
@@ -100,15 +100,14 @@ function isRadminGuiRunning(image: string): Promise<boolean> {
     });
   });
 }
-// Deja Radmin VPN encendido y visible: si la ventana no está abierta la lanza con `/show` y, cuando
-// hace falta, espera a que aparezca el adaptador (hasta `timeoutMs`).
-// Ojo: cerrar la ventana NO apaga el adaptador (lo mantiene el servicio RvControlSvc), así que no
-// alcanza con mirar la IP: si el GUI no está corriendo lo abrimos igual, aunque ya haya adaptador.
+// Deja Radmin VPN encendido: abre la ventana si hace falta y acciona su botón de encendido por UI
+// Automation (Radmin no tiene API ni flag para encenderse).
+// Ojo: mirar la IP del adaptador no sirve como señal de encendido, porque el adaptador la mantiene
+// incluso "Switched Off" (lo sostiene el servicio RvControlSvc).
 async function ensureRadminVpn(timeoutMs = 20_000): Promise<boolean> {
-  const adapterUp = Boolean(findRadminIp());
   const exe = resolveRadminExe();
   if (!exe) {
-    if (adapterUp) return true;
+    if (findRadminIp()) return true;
     appendLog('[Radmin] No se encontró Radmin VPN: indicá la ruta del ejecutable en Configuración.');
     return false;
   }
@@ -122,14 +121,12 @@ async function ensureRadminVpn(timeoutMs = 20_000): Promise<boolean> {
       appendLog(`[Radmin] No se pudo abrir: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  if (adapterUp) return true;
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    await delay(1_000);
-    if (findRadminIp()) { appendLog('[Radmin] Adaptador listo.'); return true; }
-  }
-  appendLog('[Radmin] No se detectó el adaptador a tiempo.');
-  return false;
+  const state = await runRadminPower('ensure', { windowWaitMs: timeoutMs, connectWaitMs: timeoutMs });
+  if (state === 'on') { appendLog('[Radmin] VPN en línea.'); return true; }
+  if (state === 'off' || state === 'timeout') { appendLog('[Radmin] No se pudo encender la VPN automáticamente.'); return false; }
+  // Si no pudimos determinarlo (UI Automation no disponible), no bloqueamos: seguimos con la IP.
+  appendLog(`[Radmin] No se pudo verificar el encendido (${state}).`);
+  return Boolean(findRadminIp());
 }
 // Antes de jugar se exige estar actualizado: si hay una versión nueva, se descarga e instala en vez
 // de dejar iniciar/unirse desactualizado. Si la verificación falla (sin conexión), no bloquea.
@@ -140,10 +137,9 @@ async function requireLatestVersion() {
 async function beginServer() {
   const radminReady = await ensureRadminVpn();
   const preflight = await status();
-  if (preflight.requirements.some((item) => !item.ok)) {
-    if (!radminReady && !findRadminIp()) throw new Error('No se pudo encender Radmin VPN: revisá que esté instalado y conectado a la red. Podés indicar la ruta del ejecutable en Configuración.');
-    throw new Error('Completá los requisitos marcados antes de iniciar.');
-  }
+  const blockers = preflight.requirements.filter((item) => !item.ok && item.name !== 'Radmin VPN');
+  if (blockers.length) throw new Error('Completá los requisitos marcados antes de iniciar.');
+  if (!radminReady) throw new Error('No se pudo encender Radmin VPN automáticamente. Abrí Radmin VPN y pulsá el botón de encendido, o indicá la ruta del ejecutable en Configuración.');
   assertWorldSynced(preflight.localWorldHash, preflight.publishedWorldHash);
   const manifest = await syncPack(config, appendLog);
   const ip = findRadminIp(); if (!ip) throw new Error('Radmin VPN no está disponible.');
@@ -212,7 +208,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('server:stop', async () => { await endServer(); return status(); });
   ipcMain.handle('server:join', async () => {
     await requireLatestVersion();
-    await ensureRadminVpn(12_000);
+    if (!await ensureRadminVpn(12_000)) throw new Error('No se pudo encender Radmin VPN automáticamente. Abrí Radmin VPN y pulsá el botón de encendido, o indicá la ruta del ejecutable en Configuración.');
     const lease = (await currentLease())?.value;
     if (!lease || isStale(lease)) throw new Error('No hay un servidor activo para unirse.');
     if (config.manualLauncher) clipboard.writeText(`${lease.ip}:${lease.port}`); else launchMultiMc(`${lease.ip}:${lease.port}`);
