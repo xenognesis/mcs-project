@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ConfigStore } from './config';
 import { notifyPlayers, startDiscordBot, stopDiscordBot } from './discord';
@@ -9,9 +10,10 @@ import { GitHubClient, isStale } from './github';
 import { findRadminIp, canReach, radminExeCandidates } from './network';
 import { publishManifest, syncPack } from './pack';
 import { runRadminPower } from './radmin';
+import { noticeReleaseOnce, type ReleaseNotice } from './releases';
 import { MinecraftServer } from './server';
 import { hasStoredAdminSecret, isSessionUnlocked, saveAdminSecret, setSessionUnlocked, tryAutoUnlock, verifyAdminPassword } from './security';
-import type { AppConfig, AppStatus, Lease, PackManifest } from './types';
+import type { AppConfig, AppStatus, Lease, PackManifest, UpdateState } from './types';
 import { createUpdater, type Updater } from './updater';
 import { archiveThenRestore, hashDirectory, listBackups, publishWorldState, readPublishedHash, snapshot, worldPaths } from './world';
 
@@ -26,6 +28,8 @@ let heartbeat: NodeJS.Timeout | null = null;
 let backups: NodeJS.Timeout | null = null;
 let isQuitting = false;
 let updater: Updater | null = null;
+// Última versión ya avisada en el canal de Discord, para no repetir el aviso en cada comprobación.
+let announcedRelease: string | null = null;
 const logs: string[] = [];
 // Durante el cierre por actualización o al salir, la ventana ya puede estar destruida: enviar a una
 // instancia destruida lanza "Object has been destroyed" y Electron muestra un diálogo de error.
@@ -127,6 +131,49 @@ async function ensureRadminVpn(timeoutMs = 20_000): Promise<boolean> {
   // Si no pudimos determinarlo (UI Automation no disponible), no bloqueamos: seguimos con la IP.
   appendLog(`[Radmin] No se pudo verificar el encendido (${state}).`);
   return Boolean(findRadminIp());
+}
+// Aviso de versión nueva en el canal de Discord: local + repo de coordinación, para que avise una
+// sola vez aunque las tres PCs tengan el bot configurado.
+const releaseNoticeFile = () => path.join(app.getPath('userData'), 'release-notified.json');
+const SHARED_RELEASE_NOTICE = 'release-announced.json';
+// ¿Ya se avisó esta versión? Primero en esta PC (archivo local) y después en el repositorio de
+// coordinación, que comparten las tres PCs: si otro cliente ya avisó, no repetimos el mensaje.
+async function releaseAlreadyNoticed(version: string): Promise<boolean> {
+  if (announcedRelease === null) {
+    try { announcedRelease = (JSON.parse(await readFile(releaseNoticeFile(), 'utf8')) as { version?: string }).version ?? ''; }
+    catch { announcedRelease = ''; }
+  }
+  if (announcedRelease === version) return true;
+  if (!config.githubToken || !config.coordinationRepo.owner) return false;
+  try {
+    const remote = await new GitHubClient(config.githubToken).getJson<{ version?: string }>(config.coordinationRepo, SHARED_RELEASE_NOTICE);
+    return remote?.value?.version === version;
+  } catch { return false; }
+}
+async function rememberReleaseNotice(notice: ReleaseNotice) {
+  announcedRelease = notice.version;
+  try { await writeFile(releaseNoticeFile(), JSON.stringify({ version: notice.version }), 'utf8'); } catch { /* la caché local es sólo una ayuda */ }
+  if (!config.githubToken || !config.coordinationRepo.owner) return;
+  try {
+    const github = new GitHubClient(config.githubToken);
+    const current = await github.getJson<{ version?: string }>(config.coordinationRepo, SHARED_RELEASE_NOTICE);
+    await github.putJson(config.coordinationRepo, SHARED_RELEASE_NOTICE, notice, current?.sha, `Announce release ${notice.version}`);
+  } catch (error) {
+    appendLog(`[Versión] No se pudo registrar el aviso compartido: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+// Avisa cuando el actualizador detecta una versión nueva.
+async function noticeRelease(state: UpdateState) {
+  if (state.phase !== 'available' || !state.version) return;
+  await noticeReleaseOnce({
+    token: config.discordBotToken?.trim() ?? '',
+    channelId: config.releasesChannelId?.trim() ?? '',
+    version: state.version,
+    by: config.playerName,
+    alreadyNoticed: releaseAlreadyNoticed,
+    remember: rememberReleaseNotice,
+    log: appendLog
+  });
 }
 // Antes de jugar se exige estar actualizado: si hay una versión nueva, se descarga e instala en vez
 // de dejar iniciar/unirse desactualizado. Si la verificación falla (sin conexión), no bloquea.
@@ -245,7 +292,7 @@ app.whenReady().then(async () => {
     currentVersion: app.getVersion(),
     packaged: app.isPackaged,
     repo: UPDATE_REPO,
-    onState: (state) => send('update-state', state),
+    onState: (state) => { send('update-state', state); void noticeRelease(state); },
     serverRunning: () => server.status !== 'stopped',
     log: appendLog
   });

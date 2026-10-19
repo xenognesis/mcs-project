@@ -29,6 +29,8 @@ La app se actualiza sola desde los **GitHub Releases** de su propio repositorio 
 
 Además, **iniciar o unirse a un servidor exige estar en la última versión**: al pulsar esos botones se verifica primero; si hay una versión nueva, se descarga y la app se reinicia para instalarla en vez de dejar jugar desactualizado. Si no hay conexión o la verificación falla, el arranque sigue normalmente para no bloquear la partida.
 
+Cuando el actualizador detecta una versión nueva, el bot avisa en el canal configurado en **ID Canal de avisos de versión** con el mensaje `Versión X.X.X ya disponible` y el enlace a la release. El aviso se anota en `release-announced.json` del repositorio de coordinación, así sale **una sola vez** aunque el bot esté configurado en las tres PCs.
+
 No hace falta ningún token para actualizar: el repositorio `xenognesis/mcs-project` es **público**, así que la app lee las Releases sin credenciales. Los tokens de GitHub de cada PC se usan únicamente para los repositorios **privados** del pack y de la coordinación. (Si el repo volviera a ser privado, la verificación automática fallaría en silencio: habría que volver al modo autenticado.)
 
 Para publicar una versión nueva:

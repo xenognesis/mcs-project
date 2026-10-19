@@ -8,6 +8,8 @@ export type AppConfig = {
   discordBotToken?: string;
   discordChannelId?: string;
   discordGuildId?: string;
+  /** Canal de Discord donde se avisa cuando hay una versión nueva ("Versión X.X.X ya disponible"). */
+  releasesChannelId?: string;
   trackerDataPath?: string;
   githubToken?: string;
   packRepo: RepoRef;
