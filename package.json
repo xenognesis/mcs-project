@@ -1,6 +1,6 @@
 {
   "name": "lantern-minecraft-host",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "private": true,
   "description": "Coordinador local para un servidor Minecraft compartido",
   "main": "dist-electron/main.js",

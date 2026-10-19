@@ -26,6 +26,7 @@ export type AppConfig = {
   adminDiscordId?: string;
   manualLauncher?: boolean;
   clientInstancePath?: string;
+  radminPath?: string;
   timeZone: string;
 };
 
