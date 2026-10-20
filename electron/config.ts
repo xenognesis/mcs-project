@@ -9,7 +9,7 @@ const defaults: AppConfig = {
   packRepo: { owner: '', repo: 'minecraft-pack', branch: 'main' },
   coordinationRepo: { owner: '', repo: 'minecraft-coordination', branch: 'main' },
   driveRoot: '', multiMcPath: '', multiMcInstance: 'shared-server', javaPath: 'java', serverJar: 'server.jar',
-  serverMemoryMb: 4096, port: 25565, players: [], backupIntervalMinutes: 60, backupRetention: 20,
+  serverMemoryMb: 4096, port: 25565, players: [], backupIntervalMinutes: 60, backupRetention: 20, fullBackupRetention: 2,
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 

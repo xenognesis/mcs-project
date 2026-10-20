@@ -39,6 +39,7 @@ const send = (channel: string, payload: unknown) => {
   } catch { /* ventana cerrándose: se descarta el aviso */ }
 };
 const appendLog = (line: string) => { logs.push(`${new Date().toLocaleTimeString()}  ${line}`); if (logs.length > 300) logs.shift(); send('log', logs.at(-1)); };
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toLocaleString('es-AR', { maximumFractionDigits: 1 })} MB`;
 const server = new MinecraftServer(appendLog, (state) => send('server-state', state));
 // Electron muestra un diálogo ante excepciones no atrapadas del proceso principal (por ejemplo al
 // cerrar para instalar una actualización). Las registramos en la bitácora para poder diagnosticarlas.
@@ -210,7 +211,10 @@ async function beginServer() {
     }
     await notifyPlayers(config.discordBotToken ?? '', config.players.filter((player) => player.name !== config.playerName), `${config.playerName} abrió el servidor a las ${new Intl.DateTimeFormat('es-AR', { timeStyle: 'short', timeZone: config.timeZone }).format(new Date())}`, config.discordChannelId);
     heartbeat = setInterval(async () => { if (!sessionId) return; const renewed = { ...lease, heartbeatAt: new Date().toISOString() }; if (!await github.renewLease(config.coordinationRepo, sessionId, renewed)) appendLog('No se pudo renovar el lease.'); }, 30_000);
-    backups = setInterval(() => void server.backupBarrier(async () => { const name = await snapshot(config.driveRoot, 'hourly', config.backupRetention); appendLog(`Backup ${name} creado.`); }), config.backupIntervalMinutes * 60_000);
+    backups = setInterval(() => void server.backupBarrier(async () => {
+      const backup = await snapshot(config.driveRoot, 'hourly', config.backupRetention, config.fullBackupRetention);
+      appendLog(`Backup ${backup.name} creado (incremental: ${backup.files} archivos, ${megabytes(backup.addedBytes ?? 0)} nuevos).`);
+    }).catch((error) => appendLog(`No se pudo crear el backup: ${error instanceof Error ? error.message : String(error)}`)), config.backupIntervalMinutes * 60_000);
     if (config.manualLauncher) clipboard.writeText(`${ip}:${config.port}`); else launchMultiMc(`${ip}:${config.port}`);
   } catch (error) { await server.stop(); stopDiscordBot(); try { await publishWorldIfChanged('arranque fallido'); } catch (publishError) { appendLog(`No se pudo republicar el mundo: ${publishError instanceof Error ? publishError.message : String(publishError)}`); } await github.releaseLease(config.coordinationRepo, sessionId); sessionId = null; throw error; }
 }
@@ -220,9 +224,9 @@ async function endServer() {
   stopDiscordBot();
   const activeSession = sessionId;
   try {
-    await server.stop(); const backup = await snapshot(config.driveRoot, 'shutdown', config.backupRetention); await publishWorldState(config.driveRoot, config.playerName);
+    await server.stop(); const backup = await snapshot(config.driveRoot, 'shutdown', config.backupRetention, config.fullBackupRetention); await publishWorldState(config.driveRoot, config.playerName);
     await notifyPlayers(config.discordBotToken ?? '', config.players.filter((player) => player.name !== config.playerName), `${config.playerName} cerró el servidor.`, config.discordChannelId);
-    appendLog(`Backup final ${backup} creado.`);
+    appendLog(`Backup final ${backup.name} creado (completo: ${megabytes(backup.bytes)}).`);
   } finally { await new GitHubClient(config.githubToken ?? '').releaseLease(config.coordinationRepo, activeSession); sessionId = null; }
 }
 
@@ -282,7 +286,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('backups:restore', async (_event, backup: string) => {
     if (server.status !== 'stopped') throw new Error('Detené el servidor antes de restaurar.');
     const result = await archiveThenRestore(config.driveRoot, backup, config.playerName || 'Restauración');
-    appendLog(`Backup ${backup} restaurado; versión previa archivada en conflicts.`);
+    appendLog(`Backup ${backup} restaurado${result.hash ? ` (hash ${result.hash.slice(0, 12)})` : ''}; versión previa archivada en conflicts.`);
     return result;
   });
   ipcMain.handle('clipboard:copy-ip', () => { const ip = findRadminIp(); if (ip) clipboard.writeText(ip); return ip; });

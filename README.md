@@ -59,6 +59,17 @@ Mientras alguien aloja el servidor, el bot expone estos comandos slash (respuest
 
 Las entradas marcadas como privadas sólo se muestran a su autor (`createdBy`), por lo que las privadas no se filtran. Los comandos leen `config/tracker-mod/data.json` dentro de la carpeta compartida de Drive; se puede indicar otra ruta en el asistente. El ID del servidor (guild) se detecta desde el canal de Discord configurado, o se puede fijar manualmente. Además, el administrador autorizado puede ejecutar comandos de consola por mensaje con `!cmd <comando>`.
 
+## Backups
+
+Cada tanto (configurable en *Backups incrementales: cada minutos*) y al cerrar el servidor, Lantern guarda el mundo dentro de `backups/`:
+
+- **Incrementales** (`backups/<fecha>-hourly.json`): el contenido de cada archivo del mundo se guarda una sola vez en `backups/objects/`, identificado por su hash, y el backup es un manifiesto con la lista de archivos. Como el mundo cambia poco entre guardados, un backup por hora ocupa apenas lo que cambió (unos 4 MB en un mundo de 624 MB) en lugar del mundo entero. Se conservan los últimos *Incrementales a conservar* y se libera el contenido que ya no referencia ningún backup.
+- **Completos** (`backups/full/<fecha>-shutdown/`): al cerrar el servidor se copia el mundo entero, en una carpeta autocontenida que no depende de `objects/`. Se conservan los últimos *Completos a conservar*.
+
+Comprimir no ayudaría casi nada en este caso: más del 99% del mundo son archivos `.mca` (regiones) que Minecraft ya guarda comprimidos, así que un `.zip` ahorraría alrededor del 5%. Lo que realmente ahorra es no volver a guardar lo que no cambió.
+
+Al restaurar, el mundo actual se mueve a `conflicts/` y el backup se reconstruye verificando el hash de cada archivo y el del mundo completo. Si falta contenido o está dañado, la restauración se cancela y el mundo previo vuelve a su lugar. Los backups del formato anterior (una carpeta completa por backup, directamente en `backups/`) siguen siendo restaurables igual que siempre.
+
 ## Límites de seguridad
 
-Los mundos no se fusionan. Si el hash del directorio `world` y el manifiesto publicado no coinciden, el arranque se bloquea. Al restaurar, la copia anterior se conserva bajo `conflicts/`. El cálculo del hash ignora archivos volátiles que el servidor reescribe o que no representan avance (por ejemplo `session.lock`, `random_sequences.dat`, `*.dat_old`, `*.tmp` y la carpeta `crash-reports`), para evitar bloqueos por desincronización de Google Drive.
+Los mundos no se fusionan. Si el hash del directorio `world` y el manifiesto publicado no coinciden, el arranque se bloquea. Al restaurar, la copia anterior se conserva bajo `conflicts/` y el contenido restaurado se verifica por hash. El cálculo del hash ignora archivos volátiles que el servidor reescribe o que no representan avance (por ejemplo `session.lock`, `random_sequences.dat`, `*.dat_old`, `*.tmp` y la carpeta `crash-reports`), para evitar bloqueos por desincronización de Google Drive; los backups usan la misma lista de archivos.
