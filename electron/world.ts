@@ -15,6 +15,25 @@ export const worldPaths = (root: string) => ({
   conflicts: path.join(root, 'conflicts')
 });
 
+export function resolveTestDriveRoot(config: { driveRoot: string; testDriveRoot?: string }) {
+  const root = config.testDriveRoot?.trim();
+  if (root) return root;
+  if (!config.driveRoot) return '';
+  const parent = path.dirname(config.driveRoot.replace(/[\\/]$/, ''));
+  const base = path.basename(config.driveRoot.replace(/[\\/]$/, ''));
+  if (base.toUpperCase() === 'MCS') return path.join(parent, 'MCS-TESTS');
+  return path.join(config.driveRoot, '..', 'MCS-TESTS');
+}
+
+export async function copyWorld(sourceRoot: string, targetRoot: string) {
+  const sourceWorld = worldPaths(sourceRoot).world;
+  const targetPaths = worldPaths(targetRoot);
+  try { await access(sourceWorld); } catch { throw new Error('No existe world en la carpeta de origen.'); }
+  await rm(targetPaths.world, { recursive: true, force: true });
+  await mkdir(targetRoot, { recursive: true });
+  await cp(sourceWorld, targetPaths.world, { recursive: true });
+}
+
 /**
  * Archivos que forman parte del mundo "lógico". Los volátiles que el servidor reescribe o que no
  * representan avance quedan afuera: así el hash no falla por desincronización de Drive y los
@@ -49,12 +68,36 @@ const objectPath = (paths: Paths, sha256: string) => path.join(paths.objects, sh
 
 const manifestFile = (dir: string, name: string) => path.join(dir, `${name}.json`);
 
-const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
+export function stamp(timeZone?: string) {
+  const now = new Date();
+  const tz = timeZone && timeZone.trim() ? timeZone.trim() : undefined;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      fractionalSecondDigits: 3,
+      hour12: false
+    } as Intl.DateTimeFormatOptions);
+    const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
+    const ms = (parts.fractionalSecond || '000').padEnd(3, '0').slice(0, 3);
+    const suffix = tz ? '' : 'Z';
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}-${parts.minute}-${parts.second}-${ms}${suffix}`;
+  } catch {
+    return now.toISOString().replace(/[:.]/g, '-');
+  }
+}
 
 /** `2026-10-20T04-45-56-966Z-hourly` -> `2026-10-20T04:45:56.966Z`. */
 export function nameToDate(name: string): string {
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(name);
-  return match ? `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z` : name;
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z?/.exec(name);
+  if (!match) return name;
+  const suffix = name.includes('Z-') || name.match(/Z$/) ? 'Z' : '';
+  return `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}${suffix}`;
 }
 
 type Paths = ReturnType<typeof worldPaths>;
@@ -95,9 +138,9 @@ export async function publishWorldState(root: string, host: string) {
  *
  * En ambos casos devuelve la ficha del backup creado.
  */
-export async function snapshot(root: string, reason: 'hourly' | 'shutdown', retention: number, fullRetention = 2): Promise<BackupEntry> {
+export async function snapshot(root: string, reason: 'hourly' | 'shutdown', retention: number, fullRetention = 2, timeZone?: string): Promise<BackupEntry> {
   const paths = worldPaths(root); await mkdir(paths.backups, { recursive: true });
-  const name = `${stamp()}-${reason}`;
+  const name = `${stamp(timeZone)}-${reason}`;
   return reason === 'shutdown' ? fullSnapshot(paths, name, fullRetention) : incrementalSnapshot(paths, name, retention);
 }
 
@@ -233,7 +276,7 @@ async function locateBackup(paths: Paths, backup: string) {
  * Si algo falla a mitad (contenido dañado, hash que no cierra), el mundo previo vuelve a su lugar:
  * restaurar nunca deja el mundo a medias.
  */
-export async function archiveThenRestore(root: string, backup: string, host = 'Restauración'): Promise<{ archived: string; hash: string | null; kind: BackupKind }> {
+export async function archiveThenRestore(root: string, backup: string, host = 'Restauración', timeZone?: string): Promise<{ archived: string; hash: string | null; kind: BackupKind }> {
   const paths = worldPaths(root);
   const found = await locateBackup(paths, backup);
   if (!found) throw new Error('El backup solicitado no existe.');
@@ -245,7 +288,7 @@ export async function archiveThenRestore(root: string, backup: string, host = 'R
     if (missing.length) throw new Error(`Faltan ${missing.length} archivo(s) de este backup (por ejemplo ${missing[0]}). No se restauró nada.`);
   }
   await mkdir(paths.conflicts, { recursive: true });
-  const archived = path.join(paths.conflicts, `world-${stamp()}-${randomUUID()}`);
+  const archived = path.join(paths.conflicts, `world-${stamp(timeZone)}-${randomUUID()}`);
   await rename(paths.world, archived);
   try {
     if (manifest) await restoreManifest(paths, manifest);

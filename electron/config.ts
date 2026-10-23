@@ -10,6 +10,7 @@ const defaults: AppConfig = {
   coordinationRepo: { owner: '', repo: 'minecraft-coordination', branch: 'main' },
   driveRoot: '', multiMcPath: '', multiMcInstance: 'shared-server', javaPath: 'java', serverJar: 'server.jar',
   serverMemoryMb: 4096, port: 25565, players: [], backupIntervalMinutes: 60, backupRetention: 20, fullBackupRetention: 2,
+  testDriveRoot: '', testPort: 25566, testMultiMcInstance: 'MCS-TESTS', testServerJar: '', testServerMemoryMb: 0, testBackupIntervalMinutes: 0, testBackupRetention: 1,
   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 

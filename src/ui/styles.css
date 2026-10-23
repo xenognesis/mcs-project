@@ -34,11 +34,6 @@
 .world-unlock input:focus { outline: none; border-color: #e5c675; }
 .world-unlock button { white-space: nowrap; font-size: 12px; padding: 8px 14px; }
 .world-publish-area .field-error { margin-top: 8px; }
-.busy-overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #0b171188; backdrop-filter: blur(3px); }
-.busy-card { display: flex; align-items: center; gap: 15px; background: #193327f5; border: 1px solid #4e6b56; border-radius: 12px; padding: 20px 24px; box-shadow: 0 20px 55px #000a; max-width: 460px; margin: 0 20px; }
-.busy-card p { margin: 0; color: #eef2e8; font-size: 14px; line-height: 1.5; }
-.spinner { width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; border: 3px solid #f4d27933; border-top-color: #f4d279; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .quiet.version { font: 11px 'DM Mono', monospace; color: #a9b7a8; letter-spacing: .04em; }
 .update-bar { display: flex; align-items: center; gap: 14px; padding: 11px 5vw; background: #12281f; border-bottom: 1px solid rgba(234,240,225,.14); color: #cdd8ca; font-size: 13px; }
 .update-bar > span:first-child { flex: 1; }

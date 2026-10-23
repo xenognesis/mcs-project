@@ -13,11 +13,18 @@ export async function bindToRadminIp(config: AppConfig, ip: string) {
   const desired = `server-ip=${ip}`;
   const eol = content.includes('\r\n') ? '\r\n' : '\n';
   let replaced = false;
+  let levelNameSet = false;
   const lines = content.split(/\r?\n/).map((line) => {
     if (/^server-ip=/.test(line)) { replaced = true; return desired; }
+    if (/^server-port=/.test(line) && (config as any).port) { return `server-port=${(config as any).port}`; }
+    // Lantern administra, copia y respalda siempre `world/`. Si el properties trae otro
+    // level-name (por ejemplo "MCS Test"), Minecraft ignora esa carpeta y crea otra.
+    if (/^level-name=/.test(line)) { levelNameSet = true; return 'level-name=world'; }
+    if (/^white-list=/.test(line) || /^whitelist=/.test(line)) { return 'white-list=false'; }
     return line;
   });
   if (!replaced) lines.push(desired);
+  if (!levelNameSet) lines.push('level-name=world');
   const output = lines.join(eol);
   if (output !== content) await writeFile(file, output, 'utf8');
 }
@@ -86,8 +93,25 @@ export class MinecraftServer {
   command(command: string) { if (this.process) this.process.stdin.write(`${command}\n`); }
   async backupBarrier(action: () => Promise<void>) { this.command('save-all flush'); this.command('save-off'); await new Promise((resolve) => setTimeout(resolve, 500)); try { await action(); } finally { this.command('save-on'); } }
   async stop() {
-    if (!this.process) return; this.setState('stopping'); this.command('save-all flush'); this.command('stop');
-    await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 30_000); this.process?.once('exit', () => { clearTimeout(timer); resolve(); }); });
+    const child = this.process;
+    if (!child) { if (this.state !== 'stopped') this.setState('stopped'); return; }
+    this.setState('stopping'); this.command('save-all flush'); this.command('stop');
+    const exited = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 90_000);
+      child.once('exit', () => { clearTimeout(timer); resolve(true); });
+    });
+    if (!exited) {
+      // Un mod puede quedarse colgado descargando chunks al cerrar. No dejamos el botón
+      // "Detener" bloqueado para siempre: forzamos el cierre y esperamos a que libere archivos.
+      this.onLog('[Servidor] No se cerró en 90 segundos; forzando el cierre.');
+      try { child.kill(); } catch { /* ya terminó */ }
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 5_000);
+        child.once('exit', () => { clearTimeout(timer); resolve(); });
+      });
+    }
+    // Si el evento exit no llegó, igual liberamos el estado para no quedar en "stopping".
+    if (this.process === child) { this.process = null; this.setState('stopped'); }
   }
   private setState(state: typeof this.state) { this.state = state; this.onState(state); }
 }

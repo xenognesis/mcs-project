@@ -2,6 +2,24 @@ export type RepoRef = { owner: string; repo: string; branch?: string };
 
 export type Player = { name: string; discordId: string };
 
+/** Los dos mundos que puede alojar Lantern. Comparten app, pero no drive, puerto, pack ni lease. */
+export type HostKind = 'survival' | 'tests';
+export type ServerState = 'stopped' | 'starting' | 'running' | 'stopping';
+
+export type HostStatus = {
+  kind: HostKind;
+  requirements: Requirement[];
+  lease: Lease | null;
+  localWorldHash: string | null;
+  publishedWorldHash: string | null;
+  server: ServerState;
+  driveRoot: string;
+  port: number;
+  instance: string;
+  /** Existe la carpeta world en el drive (evita hashear todo el mundo sólo para saberlo). */
+  hasWorld: boolean;
+};
+
 export type BackupKind = 'incremental' | 'completo';
 
 /** Un archivo del mundo dentro de un backup incremental: su ruta relativa y el hash de su contenido. */
@@ -56,6 +74,19 @@ export type AppConfig = {
   backupRetention: number;
   /** Cuántos backups completos (al cerrar el servidor) se conservan. Ocupan el mundo entero cada uno. */
   fullBackupRetention: number;
+  /** Carpeta del mundo de pruebas. Vacío = hermana de `driveRoot` con el nombre MCS-TESTS. */
+  testDriveRoot: string;
+  testPort: number;
+  /** Instancia MultiMC del mundo de pruebas (por defecto MCS-TESTS). */
+  testMultiMcInstance: string;
+  /** JAR del servidor de pruebas. Vacío = el que declare manifest-tests.json. */
+  testServerJar: string;
+  /** Memoria del servidor de pruebas. 0 = la misma que el survival. */
+  testServerMemoryMb: number;
+  /** Intervalo de backups de pruebas en minutos. 0 = el mismo que el survival. */
+  testBackupIntervalMinutes: number;
+  /** Backups incrementales de pruebas que se conservan. Por defecto sólo uno. */
+  testBackupRetention: number;
   adminPassword?: string;
   adminDiscordId?: string;
   manualLauncher?: boolean;
@@ -108,4 +139,5 @@ export type AppStatus = {
   hasAdminSecret: boolean;
   version: string;
   update: UpdateState;
+  hosts?: HostStatus[];
 };

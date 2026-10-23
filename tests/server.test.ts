@@ -28,6 +28,20 @@ describe('electron/server bindToRadminIp', () => {
     expect(content).toContain('motd=Hola');
   });
 
+  it('fuerza level-name=world para no crear otra carpeta de mundo', async () => {
+    await writeFile(file, 'level-name=MCS Test\nserver-port=25566\n', 'utf8');
+    await bindToRadminIp(config(), '10.0.0.5');
+    const content = await readFile(file, 'utf8');
+    expect(content).toContain('level-name=world');
+    expect(content).not.toContain('level-name=MCS Test');
+  });
+
+  it('agrega level-name=world si no existe', async () => {
+    await writeFile(file, 'server-port=25566\n', 'utf8');
+    await bindToRadminIp(config(), '10.0.0.5');
+    expect(await readFile(file, 'utf8')).toContain('level-name=world');
+  });
+
   it('agrega server-ip si no existe', async () => {
     await writeFile(file, 'server-port=25565\n', 'utf8');
     await bindToRadminIp(config(), '10.0.0.5');
