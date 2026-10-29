@@ -10,7 +10,7 @@ import {
   Routes,
   SlashCommandBuilder
 } from 'discord.js';
-import type { Player } from './types';
+import type { BackupEntry, Player } from './types';
 
 let activeClient: Client | null = null;
 
@@ -57,6 +57,8 @@ export type DiscordBotOptions = {
   /** Jugadores conocidos, para vincular ID de Discord -> nombre de Minecraft. */
   players?: Player[];
   onCommand: (command: string) => void;
+  /** Crea un backup incremental en el momento; lo usa el comando /hbackup start. */
+  onBackup?: () => Promise<BackupEntry>;
   onLog: (line: string) => void;
 };
 
@@ -137,10 +139,16 @@ function todoEmbeds(data: TrackerData, mcName: string | null): EmbedBuilder[] {
   return buildEmbeds(`Tareas (${visible.length})`, lines, 0x2ecc71);
 }
 
-const trackerCommands = [
+const slashCommands = [
   new SlashCommandBuilder().setName('coords').setDescription('Muestra las coordenadas guardadas en el tracker'),
   new SlashCommandBuilder().setName('todos').setDescription('Muestra la lista de tareas del tracker'),
-  new SlashCommandBuilder().setName('tracker').setDescription('Muestra coordenadas y tareas del tracker')
+  new SlashCommandBuilder().setName('tracker').setDescription('Muestra coordenadas y tareas del tracker'),
+  new SlashCommandBuilder()
+    .setName('hbackup')
+    .setDescription('Backups del mundo')
+    .addSubcommand((subcommand) => subcommand
+      .setName('start')
+      .setDescription('Crea un backup incremental ahora mismo'))
 ].map((command) => command.toJSON());
 
 export async function startDiscordBot(options: DiscordBotOptions): Promise<void> {
@@ -184,10 +192,6 @@ export async function startDiscordBot(options: DiscordBotOptions): Promise<void>
 
   client.once('clientReady', async () => {
     onLog(`Bot de Discord conectado como ${client.user?.tag ?? 'desconocido'}.`);
-    if (!trackerDataPath) {
-      onLog('[Discord] Sin carpeta de Drive configurada: no se registran los comandos /coords, /todos ni /tracker.');
-      return;
-    }
     try {
       const resolvedGuild = await resolveGuildId();
       if (!resolvedGuild) {
@@ -195,8 +199,8 @@ export async function startDiscordBot(options: DiscordBotOptions): Promise<void>
         return;
       }
       const rest = new REST({ version: '10' }).setToken(token);
-      await rest.put(Routes.applicationGuildCommands(client.user!.id, resolvedGuild), { body: trackerCommands });
-      onLog('[Discord] Comandos /coords, /todos y /tracker registrados.');
+      await rest.put(Routes.applicationGuildCommands(client.user!.id, resolvedGuild), { body: slashCommands });
+      onLog('[Discord] Comandos /coords, /todos, /tracker y /hbackup registrados.');
     } catch (error) {
       onLog(`[Discord] No se pudieron registrar los comandos: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -206,6 +210,38 @@ export async function startDiscordBot(options: DiscordBotOptions): Promise<void>
     if (!interaction.isChatInputCommand()) return;
     const commandName = interaction.commandName;
     try {
+      // /hbackup start no necesita ser administrador (ni op en Minecraft): la app
+      // guarda el mundo por consola y crea el backup incremental.
+      if (commandName === 'hbackup') {
+        if (interaction.options.getSubcommand() !== 'start') return;
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        if (!options.onBackup) {
+          await interaction.editReply('El backup manual no está disponible en este host.');
+          return;
+        }
+        try {
+          const backup = await options.onBackup();
+          const added = backup.addedBytes
+            ? `, ${(backup.addedBytes / 1024 / 1024).toLocaleString('es-AR', { maximumFractionDigits: 1 })} MB nuevos`
+            : '';
+          onLog(`[Discord] Backup ${backup.name} creado por ${interaction.user.tag}.`);
+          await interaction.editReply(`✅ Backup creado: \`${backup.name}\` (${backup.files} archivos${added}).`);
+        } catch (error) {
+          await interaction.editReply(`No se pudo crear el backup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return;
+      }
+
+      if (commandName !== 'coords' && commandName !== 'todos' && commandName !== 'tracker') return;
+
+      if (!trackerDataPath) {
+        await interaction.reply({
+          content: 'No hay una carpeta de Drive configurada para leer el tracker.',
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+
       const mcName = mcNameFor(interaction.user.id);
       let data: TrackerData;
       try {

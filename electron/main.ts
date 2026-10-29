@@ -143,6 +143,41 @@ function initHosts() {
   );
 }
 
+/** Host que está alojando este equipo, si hay alguno. */
+function runningHost(): HostKind | null {
+  if (hosts.statusOf('survival') === 'running') return 'survival';
+  if (hosts.statusOf('tests') === 'running') return 'tests';
+  return null;
+}
+
+/**
+ * El bot se conecta sólo mientras este equipo aloja un servidor, para que varias
+ * PCs no compitan por la misma sesión de Discord. /hbackup usa este mismo bot.
+ */
+async function startBotIfHosting() {
+  if (!runningHost() || !config.discordBotToken?.trim()) return;
+  await startDiscordBot({
+    token: config.discordBotToken.trim(),
+    adminDiscordId: config.adminDiscordId,
+    channelId: config.discordChannelId,
+    guildId: config.discordGuildId,
+    driveRoot: config.driveRoot,
+    trackerDataPath: config.trackerDataPath,
+    players: config.players,
+    onCommand: (command) => { const kind = runningHost(); if (kind) hosts.command(kind, command); },
+    onBackup: () => {
+      const kind = runningHost();
+      if (!kind) throw new Error('No hay un servidor iniciado.');
+      return hosts.createHourlyBackup(kind);
+    },
+    onLog: appendLog
+  });
+}
+
+function stopBotIfNoHost() {
+  if (hosts.statusOf('survival') === 'stopped' && hosts.statusOf('tests') === 'stopped') stopDiscordBot();
+}
+
 async function status(): Promise<AppStatus> {
   const hasAdminSecret = config.driveRoot ? await hasStoredAdminSecret(config.driveRoot) : false;
   if (!isSessionUnlocked() && config.driveRoot && config.isAdmin && config.adminPassword) {
@@ -211,6 +246,8 @@ app.whenReady().then(async () => {
       await saveAdminSecret(config.driveRoot, config.adminPassword);
     }
     await configStore.save(config);
+    // Refresca el bot con la configuración nueva si este equipo está alojando.
+    if (runningHost()) { stopDiscordBot(); await startBotIfHosting(); }
     return status();
   });
   ipcMain.handle('sync', async (_e, kind?: HostKind) => {
@@ -237,14 +274,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('server:start', async (_e, kind?: HostKind) => {
     const k = kind ?? 'survival';
     await requireLatestVersion();
-    if (k === 'tests') { await hosts.start('tests', requireLatestVersion); return status(); }
-    await hosts.start('survival', requireLatestVersion);
+    await hosts.start(k, requireLatestVersion);
+    await startBotIfHosting();
     return status();
   });
   ipcMain.handle('server:stop', async (_e, kind?: HostKind) => {
     const k = kind ?? 'survival';
-    if (k === 'tests') { await hosts.stop('tests'); return status(); }
-    await hosts.stop('survival');
+    await hosts.stop(k);
+    stopBotIfNoHost();
     return status();
   });
   ipcMain.handle('server:join', async (_e, kind?: HostKind) => {
@@ -312,7 +349,7 @@ app.whenReady().then(async () => {
     event.preventDefault(); isQuitting = true;
     void (async () => { try { if (hosts) { await hosts.stop('survival'); await hosts.stop('tests'); } } catch {} })()
       .catch((error: any) => appendLog(`[Cierre] No se pudo cerrar el servidor: ${error instanceof Error ? error.message : String(error)}`))
-      .finally(() => app.quit());
+      .finally(() => { stopDiscordBot(); app.quit(); });
   });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

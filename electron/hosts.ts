@@ -5,7 +5,7 @@ import path from 'node:path';
 import { GitHubClient, isStale } from './github';
 import { publishManifest, syncPack } from './pack';
 import { MinecraftServer } from './server';
-import type { AppConfig, HostKind, HostStatus, Lease, PackManifest } from './types';
+import type { AppConfig, BackupEntry, HostKind, HostStatus, Lease, PackManifest } from './types';
 import { archiveThenRestore, copyWorld, hashDirectory, listBackups, publishWorldState, readPublishedHash, resolveTestDriveRoot, snapshot, worldPaths } from './world';
 
 export type HostContext = {
@@ -224,6 +224,22 @@ export class HostManager {
   isHost(kind: HostKind) { return this.server(kind).status !== 'stopped' || !!this.sessions.get(kind); }
   statusOf(kind: HostKind) { return this.server(kind).status; }
   command(kind: HostKind, command: string) { this.server(kind).command(command); }
+
+  /** Crea un backup incremental inmediatamente, sin esperar al intervalo configurado. */
+  async createHourlyBackup(kind: HostKind): Promise<BackupEntry> {
+    if (this.server(kind).status !== 'running') {
+      throw new Error(kind === 'tests' ? 'El servidor de pruebas no está iniciado.' : 'El servidor survival no está iniciado.');
+    }
+    const ctx = this.ctx(kind);
+    let backup!: BackupEntry;
+    await this.server(kind).backupBarrier(async () => {
+      backup = await snapshot(ctx.driveRoot, 'hourly', ctx.retention, ctx.fullRetention, this.config.timeZone);
+    });
+    this.appendLog(kind === 'tests'
+      ? `[Pruebas] Backup manual ${backup.name} creado (incremental).`
+      : `Backup manual ${backup.name} creado (incremental: ${backup.files} archivos).`);
+    return backup;
+  }
   isCopyingTestsWorld() { return this.copyingTestsWorld; }
   async copyTestsWorldFromSurvival() {
     if (this.copyingTestsWorld) throw new Error('Ya hay una copia en curso.');

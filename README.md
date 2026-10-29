@@ -56,6 +56,7 @@ Mientras alguien aloja el servidor, el bot expone estos comandos slash (respuest
 - `/coords` -> coordenadas guardadas en el mod `tracker-mod` (públicas + las privadas de quien consulta).
 - `/todos` -> lista de tareas del tracker (públicas + las privadas de quien consulta).
 - `/tracker` -> ambas listas.
+- `/hbackup start` -> crea en ese momento un backup incremental del mundo, sin esperar al intervalo configurado. No hace falta ser `op` ni administrador: el guardado se hace por consola y sólo puede ejecutarlo mientras alguien aloja el servidor.
 
 Las entradas marcadas como privadas sólo se muestran a su autor (`createdBy`), por lo que las privadas no se filtran. Los comandos leen `config/tracker-mod/data.json` dentro de la carpeta compartida de Drive; se puede indicar otra ruta en el asistente. El ID del servidor (guild) se detecta desde el canal de Discord configurado, o se puede fijar manualmente. Además, el administrador autorizado puede ejecutar comandos de consola por mensaje con `!cmd <comando>`.
 
