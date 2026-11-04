@@ -2,8 +2,24 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { bindToRadminIp, MinecraftServer } from '../electron/server';
+import { bindToRadminIp, MinecraftServer, parseBackupRequest } from '../electron/server';
 import type { AppConfig } from '../electron/types';
+
+describe('electron/server parseBackupRequest', () => {
+  it('detecta la marca que imprime el mod tracker', () => {
+    expect(parseBackupRequest('[14:47:31] [Server thread/INFO]: [STDOUT]: [Lantern:HBackup] start Server')).toBe('Server');
+  });
+
+  it('acepta el nombre del jugador y usa consola si falta', () => {
+    expect(parseBackupRequest('[Lantern:HBackup] start Aira')).toBe('Aira');
+    expect(parseBackupRequest('[Lantern:HBackup] start')).toBe('consola');
+    expect(parseBackupRequest('\u001b[32m[Lantern:HBackup] start Aira\u001b[0m')).toBe('Aira');
+  });
+
+  it('ignora líneas que no son una solicitud', () => {
+    expect(parseBackupRequest('[Server] hbackup start')).toBeNull();
+  });
+});
 
 describe('electron/server bindToRadminIp', () => {
   let root: string;

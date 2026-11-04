@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { GitHubClient, isStale } from './github';
 import { publishManifest, syncPack } from './pack';
+import { cleanupDriveTrash } from './rclone';
 import { MinecraftServer } from './server';
 import type { AppConfig, BackupEntry, HostKind, HostStatus, Lease, PackManifest } from './types';
 import { archiveThenRestore, copyWorld, hashDirectory, listBackups, publishWorldState, readPublishedHash, resolveTestDriveRoot, snapshot, worldPaths } from './world';
@@ -29,6 +30,8 @@ export class HostManager {
   private sessions = new Map<HostKind, string>();
   private heartbeats = new Map<HostKind, NodeJS.Timeout>();
   private backups = new Map<HostKind, NodeJS.Timeout>();
+  /** Evita que dos backups (automático + manual) solapen la barrera save-off/save-on. */
+  private backupLocks = new Set<HostKind>();
 
   constructor(
     private config: AppConfig,
@@ -41,8 +44,16 @@ export class HostManager {
     private notify: (msg: string) => Promise<void>,
     private isUnlocked: () => boolean
   ) {
-    this.servers.set('survival', new MinecraftServer(appendLog, (state) => send('server-state', { kind: 'survival', state })));
-    this.servers.set('tests', new MinecraftServer(appendLog, (state) => send('server-state', { kind: 'tests', state })));
+    this.servers.set('survival', new MinecraftServer(
+      appendLog,
+      (state) => send('server-state', { kind: 'survival', state }),
+      (player) => this.handleBackupRequest('survival', player)
+    ));
+    this.servers.set('tests', new MinecraftServer(
+      appendLog,
+      (state) => send('server-state', { kind: 'tests', state }),
+      (player) => this.handleBackupRequest('tests', player)
+    ));
   }
 
   updateConfig(config: AppConfig) { this.config = config; }
@@ -133,6 +144,8 @@ export class HostManager {
     await requireLatest();
     const ready = await this.ensureRadmin();
     if (!ready) throw new Error('No se pudo encender Radmin VPN automáticamente.');
+    // Best-effort: vaciar la papelera de Drive no debe retrasar ni bloquear el arranque.
+    cleanupDriveTrash(this.config, this.appendLog);
     await mkdir(ctx.driveRoot, { recursive: true });
     if (kind === 'tests') {
       // La copia de reemplazo se hace con el botón "Copiar mundo survival". Sólo el primer
@@ -175,16 +188,12 @@ export class HostManager {
         const renewed = { ...lease, heartbeatAt: new Date().toISOString() };
         try { await github.renewLease(this.config.coordinationRepo, s, renewed, ctx.leaseFile); } catch { /* ignore */ }
       }, 30_000));
-      this.backups.set(kind, setInterval(() => void this.server(kind).backupBarrier(async () => {
-        if (kind === 'tests') {
-          // Only 1 hourly backup for tests as requested
-          const backup = await snapshot(ctx.driveRoot, 'hourly', ctx.retention, 0, this.config.timeZone);
-          this.appendLog(`[Pruebas] Backup ${backup.name} creado (incremental).`);
-        } else {
-          const backup = await snapshot(ctx.driveRoot, 'hourly', ctx.retention, ctx.fullRetention, this.config.timeZone);
-          this.appendLog(`Backup ${backup.name} creado (incremental: ${backup.files} archivos).`);
-        }
-      }).catch((e) => this.appendLog(`No se pudo crear backup: ${(e as Error).message}`)), ctx.intervalMinutes * 60_000));
+      // El snapshot se centraliza en createSnapshot para respetar el candado entre
+      // backups automáticos y manuales (por ejemplo, /hbackup start desde Minecraft).
+      this.backups.set(kind, setInterval(() => {
+        void this.createSnapshot(kind, 'automático')
+          .catch((e) => this.appendLog(`No se pudo crear backup: ${(e as Error).message}`));
+      }, ctx.intervalMinutes * 60_000));
       if (kind === 'survival') {
         try { await this.notify(`${this.config.playerName} abrió el servidor a las ${new Intl.DateTimeFormat('es-AR', { timeStyle: 'short', timeZone: this.config.timeZone }).format(new Date())}`); } catch { /* ignore */ }
       }
@@ -227,18 +236,41 @@ export class HostManager {
 
   /** Crea un backup incremental inmediatamente, sin esperar al intervalo configurado. */
   async createHourlyBackup(kind: HostKind): Promise<BackupEntry> {
+    return this.createSnapshot(kind, 'manual');
+  }
+
+  /**
+   * Punto único para los backups incrementales (automáticos y manuales). El
+   * candado por host evita que dos barreras `save-off`/`save-on` se solapen.
+   */
+  private async createSnapshot(kind: HostKind, label: 'automático' | 'manual'): Promise<BackupEntry> {
     if (this.server(kind).status !== 'running') {
       throw new Error(kind === 'tests' ? 'El servidor de pruebas no está iniciado.' : 'El servidor survival no está iniciado.');
     }
-    const ctx = this.ctx(kind);
-    let backup!: BackupEntry;
-    await this.server(kind).backupBarrier(async () => {
-      backup = await snapshot(ctx.driveRoot, 'hourly', ctx.retention, ctx.fullRetention, this.config.timeZone);
-    });
-    this.appendLog(kind === 'tests'
-      ? `[Pruebas] Backup manual ${backup.name} creado (incremental).`
-      : `Backup manual ${backup.name} creado (incremental: ${backup.files} archivos).`);
-    return backup;
+    if (this.backupLocks.has(kind)) {
+      throw new Error('Ya hay un backup en curso. Esperá a que termine.');
+    }
+    this.backupLocks.add(kind);
+    try {
+      const ctx = this.ctx(kind);
+      let backup!: BackupEntry;
+      await this.server(kind).backupBarrier(async () => {
+        backup = await snapshot(ctx.driveRoot, 'hourly', ctx.retention, ctx.fullRetention, this.config.timeZone);
+      });
+      this.appendLog(kind === 'tests'
+        ? `[Pruebas] Backup ${label} ${backup.name} creado (incremental).`
+        : `Backup ${label} ${backup.name} creado (incremental: ${backup.files} archivos).`);
+      return backup;
+    } finally {
+      this.backupLocks.delete(kind);
+    }
+  }
+
+  /** Lo invoca el servidor cuando alguien ejecuta `/hbackup start` dentro del juego. */
+  private handleBackupRequest(kind: HostKind, player: string) {
+    this.appendLog(`[Backup] ${player} solicitó un backup manual desde Minecraft.`);
+    void this.createHourlyBackup(kind)
+      .catch((e) => this.appendLog(`[Backup] No se pudo crear el backup manual: ${(e as Error).message}`));
   }
   isCopyingTestsWorld() { return this.copyingTestsWorld; }
   async copyTestsWorldFromSurvival() {

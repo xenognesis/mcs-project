@@ -5,7 +5,7 @@ import type { AppConfig } from './types';
 
 const defaults: AppConfig = {
   playerName: '', isAdmin: false, discordBotToken: '', discordChannelId: '', discordGuildId: '', releasesChannelId: '1561576254111613040', trackerDataPath: '', githubToken: '',
-  adminPassword: '', adminDiscordId: '', manualLauncher: false, clientInstancePath: '', radminPath: '',
+  adminPassword: '', adminDiscordId: '', manualLauncher: false, clientInstancePath: '', radminPath: '', rclonePath: '', rcloneRemote: '',
   packRepo: { owner: '', repo: 'minecraft-pack', branch: 'main' },
   coordinationRepo: { owner: '', repo: 'minecraft-coordination', branch: 'main' },
   driveRoot: '', multiMcPath: '', multiMcInstance: 'shared-server', javaPath: 'java', serverJar: 'server.jar',

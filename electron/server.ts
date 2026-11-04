@@ -29,10 +29,27 @@ export async function bindToRadminIp(config: AppConfig, ip: string) {
   if (output !== content) await writeFile(file, output, 'utf8');
 }
 
+/**
+ * El mod tracker imprime esta marca cuando alguien ejecuta `/hbackup start`.
+ * El prefijo `[STDOUT]` que agrega Minecraft no molesta: buscamos la marca en
+ * cualquier posición de la línea.
+ */
+export function parseBackupRequest(line: string): string | null {
+  // Algunas consolas agregan códigos ANSI aunque la salida esté redirigida.
+  const plain = line.replace(/\u001b\[[0-9;]*m/g, '');
+  const match = /\[Lantern:HBackup\]\s+start(?:\s+(.+?))?\s*$/.exec(plain);
+  if (!match) return null;
+  return match[1]?.trim() || 'consola';
+}
+
 export class MinecraftServer {
   private process: ChildProcessWithoutNullStreams | null = null;
   private state: 'stopped' | 'starting' | 'running' | 'stopping' = 'stopped';
-  constructor(private readonly onLog: (line: string) => void, private readonly onState: (state: typeof this.state) => void) {}
+  constructor(
+    private readonly onLog: (line: string) => void,
+    private readonly onState: (state: typeof this.state) => void,
+    private readonly onBackupRequest?: (player: string) => void
+  ) {}
   get status() { return this.state; }
   async start(config: AppConfig, bindIp?: string) {
     if (this.process) throw new Error('El servidor ya está iniciado.');
@@ -61,6 +78,8 @@ export class MinecraftServer {
       for (const line of lines.filter(Boolean)) {
         this.onLog(line);
         tail.push(line); if (tail.length > 30) tail.shift();
+        const requestedBy = parseBackupRequest(line);
+        if (requestedBy) this.onBackupRequest?.(requestedBy);
         if (!ready && /Done \(.+\)!|For help, type/i.test(line)) { ready = true; this.setState('running'); }
       }
     };

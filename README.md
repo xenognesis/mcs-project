@@ -57,6 +57,7 @@ Mientras alguien aloja el servidor, el bot expone estos comandos slash (respuest
 - `/todos` -> lista de tareas del tracker (públicas + las privadas de quien consulta).
 - `/tracker` -> ambas listas.
 - `/hbackup start` -> crea en ese momento un backup incremental del mundo, sin esperar al intervalo configurado. No hace falta ser `op` ni administrador: el guardado se hace por consola y sólo puede ejecutarlo mientras alguien aloja el servidor.
+- `/hbackup start` **dentro de Minecraft** -> el mod `tracker-mod` del pack agrega el mismo comando en el juego. Cualquier jugador puede ejecutarlo; el mod imprime una marca en la consola y Lantern crea el backup incremental. Si ya hay un backup en curso, la solicitud se rechaza con un aviso en la bitácora.
 
 Las entradas marcadas como privadas sólo se muestran a su autor (`createdBy`), por lo que las privadas no se filtran. Los comandos leen `config/tracker-mod/data.json` dentro de la carpeta compartida de Drive; se puede indicar otra ruta en el asistente. El ID del servidor (guild) se detecta desde el canal de Discord configurado, o se puede fijar manualmente. Además, el administrador autorizado puede ejecutar comandos de consola por mensaje con `!cmd <comando>`.
 
@@ -70,6 +71,25 @@ Cada tanto (configurable en *Backups incrementales: cada minutos*) y al cerrar e
 Comprimir no ayudaría casi nada en este caso: más del 99% del mundo son archivos `.mca` (regiones) que Minecraft ya guarda comprimidos, así que un `.zip` ahorraría alrededor del 5%. Lo que realmente ahorra es no volver a guardar lo que no cambió.
 
 Al restaurar, el mundo actual se mueve a `conflicts/` y el backup se reconstruye verificando el hash de cada archivo y el del mundo completo. Si falta contenido o está dañado, la restauración se cancela y el mundo previo vuelve a su lugar. Los backups del formato anterior (una carpeta completa por backup, directamente en `backups/`) siguen siendo restaurables igual que siempre.
+
+## Vaciar la papelera de Google Drive (rclone)
+
+Al encender cualquiera de los dos servidores (survival o pruebas), Lantern puede vaciar la papelera de Google Drive en segundo plano. Usa [rclone](https://rclone.org/downloads/) porque la carpeta montada de Google Drive no expone la papelera de la nube y la API oficial requiere permisos restringidos.
+
+1. Instalá rclone (`winget install Rclone.Rclone` o el instalador de rclone.org).
+2. Configurá un remoto de Google Drive una sola vez:
+
+   ```powershell
+   rclone config
+   ```
+
+   Creá un remoto llamado, por ejemplo, `gdrive`, elegí el tipo `drive` y completá la autorización en el navegador. Verificalo con `rclone lsd gdrive:`.
+3. En **Configuración**, completá:
+   - **rclone · ejecutable**: ruta a `rclone.exe`. Vacío = usar el `rclone` del PATH.
+   - **rclone · remoto de Google Drive**: nombre del remoto, por ejemplo `gdrive`. Vacío = no vaciar la papelera.
+4. Al iniciar un servidor, Lantern ejecuta `rclone cleanup gdrive:` sin bloquear el arranque. El resultado (o el motivo del fallo) queda en la bitácora.
+
+La papelera es **por cuenta de Google**: se vacía la del usuario autenticado en rclone. Si el mundo vive en una unidad compartida, configurá el remoto para esa unidad; `rclone cleanup` opera sobre la papelera de esa cuenta/unidad.
 
 ## Límites de seguridad
 

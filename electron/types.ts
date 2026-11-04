@@ -92,6 +92,10 @@ export type AppConfig = {
   manualLauncher?: boolean;
   clientInstancePath?: string;
   radminPath?: string;
+  /** Ejecutable de rclone. Vacío = usar el `rclone` del PATH. */
+  rclonePath?: string;
+  /** Remoto de rclone que apunta a Google Drive (ej. `gdrive`). Vacío = no vaciar la papelera. */
+  rcloneRemote?: string;
   timeZone: string;
 };
 
