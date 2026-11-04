@@ -84,6 +84,8 @@ Al encender cualquiera de los dos servidores (survival o pruebas), Lantern puede
    ```
 
    Creá un remoto llamado, por ejemplo, `gdrive`, elegí el tipo `drive` y completá la autorización en el navegador. Verificalo con `rclone lsd gdrive:`.
+
+   > rclone advierte que el `client_id` compartido que trae por defecto deja de funcionar durante 2026. Si el remoto empieza a dar error de autenticación, creá tu propio `client_id` de Google ([instrucciones](https://rclone.org/drive/#making-your-own-client-id)), cargalo en el remoto con `rclone config update gdrive client_id=... client_secret=...` y volvé a autorizar con `rclone config reconnect gdrive:`.
 3. En **Configuración**, completá:
    - **rclone · ejecutable**: ruta a `rclone.exe`. Vacío = usar el `rclone` del PATH.
    - **rclone · remoto de Google Drive**: nombre del remoto, por ejemplo `gdrive`. Vacío = no vaciar la papelera.
