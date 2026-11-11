@@ -65,8 +65,11 @@ Las entradas marcadas como privadas sólo se muestran a su autor (`createdBy`), 
 
 Cada tanto (configurable en *Backups incrementales: cada minutos*) y al cerrar el servidor, Lantern guarda el mundo dentro de `backups/`:
 
-- **Incrementales** (`backups/<fecha>-hourly.json`): el contenido de cada archivo del mundo se guarda una sola vez en `backups/objects/`, identificado por su hash, y el backup es un manifiesto con la lista de archivos. Como el mundo cambia poco entre guardados, un backup por hora ocupa apenas lo que cambió (unos 4 MB en un mundo de 624 MB) en lugar del mundo entero. Se conservan los últimos *Incrementales a conservar* y se libera el contenido que ya no referencia ningún backup.
+- **Incrementales** (`backups/<fecha>-hourly.json`): el contenido de cada archivo del mundo se guarda una sola vez en `backups/objects/`, identificado por su hash, y el backup es un manifiesto con la lista de archivos. Como el mundo cambia poco entre guardados, un backup por hora ocupa apenas lo que cambió (unos 4 MB en un mundo de 624 MB) en lugar del mundo entero. Se conservan los últimos *Incrementales a conservar* (máximo **10**) y se libera el contenido que ya no referencia ningún backup.
 - **Completos** (`backups/full/<fecha>-shutdown/`): al cerrar el servidor se copia el mundo entero, en una carpeta autocontenida que no depende de `objects/`. Se conservan los últimos *Completos a conservar*.
+- **Sin completos**: si desactivás *Backups completos al cerrar el servidor*, el cierre de survival guarda en cambio un incremental (`backups/<fecha>-shutdown.json`). Se sigue cubriendo el estado final, pero Drive sólo sincroniza lo que cambió y *Detener* tarda mucho menos. Los completos que ya existan no se borran solos: se pueden eliminar a mano de `backups/full/`.
+
+El tope de 10 incrementales existe por el mismo motivo: cada backup deja contenido en `backups/objects/`, y todo eso tiene que sincronizarse a Drive.
 
 Comprimir no ayudaría casi nada en este caso: más del 99% del mundo son archivos `.mca` (regiones) que Minecraft ya guarda comprimidos, así que un `.zip` ahorraría alrededor del 5%. Lo que realmente ahorra es no volver a guardar lo que no cambió.
 

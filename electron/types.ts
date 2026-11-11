@@ -28,7 +28,7 @@ export type BackupFile = { path: string; sha256: string; size: number };
 /** Manifiesto de un backup incremental: qué contenía el mundo en ese momento. */
 export type BackupManifest = {
   createdAt: string;
-  reason: 'hourly';
+  reason: 'hourly' | 'shutdown';
   /** Tamaño del mundo en ese momento, no lo que ocupa el backup. */
   bytes: number;
   /** Bytes que hubo que guardar por primera vez; el resto ya estaba en `backups/objects`. */
@@ -72,6 +72,11 @@ export type AppConfig = {
   players: Player[];
   backupIntervalMinutes: number;
   backupRetention: number;
+  /**
+   * Si es `false`, al cerrar el servidor se guarda un incremental en lugar de copiar el mundo entero.
+   * Por defecto `true` (comportamiento anterior).
+   */
+  fullBackupEnabled?: boolean;
   /** Cuántos backups completos (al cerrar el servidor) se conservan. Ocupan el mundo entero cada uno. */
   fullBackupRetention: number;
   /** Carpeta del mundo de pruebas. Vacío = hermana de `driveRoot` con el nombre MCS-TESTS. */

@@ -214,13 +214,26 @@ export class HostManager {
       await this.server(kind).stop();
       // El mundo de pruebas es descartable y ya tiene backups periódicos. Un snapshot
       // completo acá mantenía el botón "Detener" bloqueado varios minutos sobre Drive.
-      // Survival sí necesita su backup completo de cierre antes de liberar el lease.
+      // Survival necesita un backup de cierre antes de liberar el lease: completo si la
+      // opción está habilitada, incremental si no (mucho menos que sincronizar a Drive).
       if (kind === 'survival') {
+        const full = this.config.fullBackupEnabled !== false;
         try {
-          const backup = await snapshot(ctx.driveRoot, 'shutdown', ctx.retention, ctx.fullRetention, this.config.timeZone);
+          const backup = await snapshot(
+            ctx.driveRoot,
+            full ? 'shutdown' : 'shutdown-incremental',
+            ctx.retention,
+            ctx.fullRetention,
+            this.config.timeZone
+          );
+          this.appendLog(full
+            ? `Backup completo de cierre ${backup.name} creado.`
+            : `Backup incremental de cierre ${backup.name} creado (backups completos deshabilitados).`);
           await publishWorldState(ctx.driveRoot, this.config.playerName);
           try { await this.notify(`${this.config.playerName} cerró el servidor.`); } catch { /* ignore */ }
-        } catch { /* ignore */ }
+        } catch (error) {
+          this.appendLog(`No se pudo crear el backup de cierre: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     } finally {
       if (sid) {

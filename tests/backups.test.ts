@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { archiveThenRestore, hashDirectory, listBackups, snapshot, worldPaths } from '../electron/world';
+import { archiveThenRestore, clampRetention, hashDirectory, listBackups, MAX_HOURLY_BACKUPS, snapshot, worldPaths } from '../electron/world';
 
 /** Espera mínima para que dos backups no compartan el mismo sello de tiempo. */
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
@@ -118,6 +118,34 @@ describe('electron/world backups', () => {
     await tick();
     const second = await snapshot(root, 'shutdown', 20, 1);
     expect((await listBackups(root)).map((entry) => entry.name)).toEqual([second.name]);
+  });
+
+  it('nunca conserva más de 10 backups incrementales', async () => {
+    for (let i = 0; i < 12; i++) { await tick(); await write('level.dat', `estado-${i}`); await snapshot(root, 'hourly', 50); }
+
+    const list = await listBackups(root);
+    expect(list).toHaveLength(MAX_HOURLY_BACKUPS);
+    // Los que quedan son los más nuevos.
+    expect(list[0].createdAt >= list[list.length - 1].createdAt).toBe(true);
+  });
+
+  it('recorta la retención incremental al rango válido', () => {
+    expect(clampRetention(0)).toBe(1);
+    expect(clampRetention(4)).toBe(4);
+    expect(clampRetention(11)).toBe(MAX_HOURLY_BACKUPS);
+    expect(clampRetention(Number.NaN)).toBe(MAX_HOURLY_BACKUPS);
+  });
+
+  it('guarda un incremental de cierre cuando los completos están deshabilitados', async () => {
+    const backup = await snapshot(root, 'shutdown-incremental', 10);
+
+    expect(backup).toMatchObject({ kind: 'incremental', files: 2 });
+    expect(backup.name).toMatch(/-shutdown$/);
+    const manifest = JSON.parse(await readFile(path.join(root, 'backups', `${backup.name}.json`), 'utf8'));
+    expect(manifest.reason).toBe('shutdown');
+    expect(await listBackups(root)).toHaveLength(1);
+    // No copia el mundo entero: `backups/full` ni siquiera se crea.
+    await expect(readdir(worldPaths(root).full)).rejects.toThrow();
   });
 
   it('sigue restaurando los backups completos del formato anterior', async () => {

@@ -104,6 +104,18 @@ type Paths = ReturnType<typeof worldPaths>;
 /** Ficha de un backup completo, guardada al lado de su carpeta para poder listarlo sin recorrerlo. */
 type FullRecord = { createdAt: string; reason: 'shutdown'; bytes: number; files: number };
 
+/**
+ * Tope de backups incrementales que se conservan. Cada backup deja contenido en `backups/objects`,
+ * y Drive tiene que sincronizar todo eso antes de apagar, así que no conviene acumular de más.
+ */
+export const MAX_HOURLY_BACKUPS = 10;
+
+/** Recorta la retención incremental al rango válido (al menos 1, nunca más de `MAX_HOURLY_BACKUPS`). */
+export function clampRetention(retention: number) {
+  const value = Number.isFinite(retention) ? Math.trunc(retention) : MAX_HOURLY_BACKUPS;
+  return Math.min(MAX_HOURLY_BACKUPS, Math.max(1, value));
+}
+
 const readJson = async <T>(file: string): Promise<T | null> => {
   try { return JSON.parse(await readFile(file, 'utf8')) as T; } catch { return null; }
 };
@@ -132,19 +144,25 @@ export async function publishWorldState(root: string, host: string) {
  *
  * - `hourly`: **incremental**. Cada archivo se guarda una sola vez en `backups/objects` (identificado
  *   por su hash) y el backup es un manifiesto con la lista de archivos. Como el mundo cambia poco,
- *   cada backup ocupa sólo lo que cambió. Se conservan los últimos `retention`.
+ *   cada backup ocupa sólo lo que cambió. Se conservan los últimos `retention` (máximo `MAX_HOURLY_BACKUPS`).
  * - `shutdown`: **completo y autocontenido**. Una copia entera del mundo en `backups/full/<nombre>`,
  *   que no depende de `objects`. Se conservan los últimos `fullRetention`.
+ * - `shutdown-incremental`: **incremental**, también al cerrar. Se usa cuando los backups completos
+ *   están deshabilitados: guarda el estado final sin copiar el mundo entero.
  *
- * En ambos casos devuelve la ficha del backup creado.
+ * En todos los casos devuelve la ficha del backup creado.
  */
-export async function snapshot(root: string, reason: 'hourly' | 'shutdown', retention: number, fullRetention = 2, timeZone?: string): Promise<BackupEntry> {
+export type SnapshotReason = 'hourly' | 'shutdown' | 'shutdown-incremental';
+
+export async function snapshot(root: string, reason: SnapshotReason, retention: number, fullRetention = 2, timeZone?: string): Promise<BackupEntry> {
   const paths = worldPaths(root); await mkdir(paths.backups, { recursive: true });
-  const name = `${stamp(timeZone)}-${reason}`;
-  return reason === 'shutdown' ? fullSnapshot(paths, name, fullRetention) : incrementalSnapshot(paths, name, retention);
+  if (reason === 'shutdown') return fullSnapshot(paths, `${stamp(timeZone)}-shutdown`, fullRetention);
+  const incrementalAtShutdown = reason === 'shutdown-incremental';
+  const name = `${stamp(timeZone)}-${incrementalAtShutdown ? 'shutdown' : 'hourly'}`;
+  return incrementalSnapshot(paths, name, retention, incrementalAtShutdown ? 'shutdown' : 'hourly');
 }
 
-async function incrementalSnapshot(paths: Paths, name: string, retention: number): Promise<BackupEntry> {
+async function incrementalSnapshot(paths: Paths, name: string, retention: number, reason: BackupManifest['reason']): Promise<BackupEntry> {
   const hash = createHash('sha256');
   const entries: BackupFile[] = [];
   let bytes = 0; let addedBytes = 0;
@@ -163,7 +181,7 @@ async function incrementalSnapshot(paths: Paths, name: string, retention: number
       addedBytes += content.length;
     }
   }
-  const manifest: BackupManifest = { createdAt: new Date().toISOString(), reason: 'hourly', bytes, addedBytes, hash: hash.digest('hex'), files: entries };
+  const manifest: BackupManifest = { createdAt: new Date().toISOString(), reason, bytes, addedBytes, hash: hash.digest('hex'), files: entries };
   await writeFile(manifestFile(paths.backups, name), JSON.stringify(manifest), 'utf8');
   await pruneIncrementals(paths, retention);
   return { name, kind: 'incremental', createdAt: manifest.createdAt, files: entries.length, bytes, addedBytes };
@@ -185,7 +203,7 @@ async function fullSnapshot(paths: Paths, name: string, retention: number): Prom
 async function pruneIncrementals(paths: Paths, retention: number) {
   const names = await incrementalNames(paths);
   const removed: string[] = [];
-  while (names.length > Math.max(1, retention)) removed.push(names.shift()!);
+  while (names.length > clampRetention(retention)) removed.push(names.shift()!);
   for (const name of removed) await rm(manifestFile(paths.backups, name), { force: true });
   await collectObjects(paths, names);
 }
